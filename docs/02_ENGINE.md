@@ -145,13 +145,13 @@ sound is unchanged).
 | `shimmerInterval` | semitones, −24…+24 (the usual set: −12, −7, +5, +7, +12, +19, +24; default +12) |
 
 Structure: the output taps of both channels (before DISTANCE) feed a two-tap delay-line pitch
-shifter (one line per channel, window 70 ms, taps half a window apart with a Hann crossfade, cubic
+shifter (one line per channel, window 70 ms, taps half a window apart with a smoothstep crossfade, cubic
 reads; the tap phase moves by (1 − ratio)/window per sample). The shifted signal is band-limited
 (one-pole high-pass 140 Hz, two cascaded one-pole low-passes at 6.5 kHz, so the repeated shifts
 cannot pile up as metallic top end), scaled by 0.6·amount, soft-limited by y/(1 + |y|) and injected into the
 tank input of the next sample (L into half 0, R into half 1). The soft limit bounds the injection to
 ±1 whatever the tank level, so the tail cannot run away; the loop guard (±8) stays. Measured
-(`tearwash_dsp_test`): +12 gives +36.8 dB at the octave, −12 +31.9 dB, +7 +17.7 dB; decay 60 s with
+(`tearwash_dsp_test`): +12 gives +36.8 dB at the octave, −12 +31.7 dB, +7 +17.6 dB; decay 60 s with
 amount 1 peaks at 2.5 or less after a full-scale noise burst.
 
 - The path fades in and out over 50 ms, is switched off in HOLD (the frozen tail stays as it is) and in

@@ -101,7 +101,7 @@ private:
         double gLow = 0, gMid = 0;
     };
 
-    // Dual-tap (Hann-crossfaded) delay-line pitch shifter for the shimmer path, one line per channel.
+    // Dual-tap (smoothstep-crossfaded) delay-line pitch shifter for the shimmer path, one line per channel.
     struct Shifter {
         Delay line[2];
         OnePole hp[2], lp1[2], lp2[2];

@@ -309,8 +309,9 @@ void Reverb::runTank(double xl, double xr, double& oa, double& ob, double& oc, d
         sh.phase -= std::floor(sh.phase);
         double pB = sh.phase + 0.5;
         pB -= std::floor(pB);
-        const double sA = std::sin(kPi * sh.phase);
-        const double wA = sA * sA, wB = 1.0 - wA;   // Hann crossfade: the taps sit half a window apart
+        // Smoothstep crossfade (no libm per sample): tap A is silent where it wraps, and wA + wB = 1.
+        const double q = 1.0 - std::fabs(2.0 * sh.phase - 1.0);
+        const double wA = q * q * (3.0 - 2.0 * q), wB = 1.0 - wA;   // the taps sit half a window apart
         const double dA = 3.0 + sh.phase * sh.window, dB = 3.0 + pB * sh.window;
         for (int ch = 0; ch < 2; ++ch) {
             sh.line[ch].push(static_cast<float>(tap[ch]));
