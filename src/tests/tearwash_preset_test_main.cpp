@@ -105,7 +105,11 @@ static Index* g_index = nullptr;
 int main(int argc, char** argv) {
     const std::string tmp = (std::filesystem::temp_directory_path() / "tearwash_preset_test").string();
     std::filesystem::remove_all(tmp);
+#ifdef _WIN32
+    _putenv_s("TEARWASH_PRESET_DIR", tmp.c_str());
+#else
     setenv("TEARWASH_PRESET_DIR", tmp.c_str(), 1);
+#endif
     const bool fit = argc > 2 && std::strcmp(argv[1], "--fit") == 0;
 
     // Format round trip.
