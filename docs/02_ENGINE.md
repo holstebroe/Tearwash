@@ -127,3 +127,38 @@ loads its stored settings into ids 1–9 and 11–13; Mix, gains and Rear Output
   faders, wheel, toggles and program buttons; idle frames do not redraw; state round trip;
   parameter text.
 - `tearwash_preset_test`: 03 §6.
+- `tearwash_dsp_test`, shimmer (§7): off is bit-identical to the plain reverb; +12, +7 and −12 put at least
+  15 dB more energy at the shifted frequency than the unshifted reverb; decay 60 s with amount 1 stays
+  finite and bounded (peak < 8) for 60 s of tail, for every interval of the set on GRAND HALL, PLATE
+  and VAST SPACE.
+
+## 7. Shimmer [A]
+
+Requested by Plumeflow (its spec 09). Engine-level only: `Controls::shimmer`, `shimmerInterval`
+and `shimmerMode` are not plugin parameters yet (the plugin leaves them at their defaults, so its
+sound is unchanged).
+
+| Control | Meaning |
+| --- | --- |
+| `shimmerMode` | off by default; with it off the path does no work and the output is bit-identical to the reverb without shimmer |
+| `shimmer` | 0…1, the amount of pitch-shifted energy fed back into the tank input |
+| `shimmerInterval` | semitones, −24…+24 (the usual set: −12, −7, +5, +7, +12, +19, +24; default +12) |
+
+Structure: the output taps of both channels (before DISTANCE) feed a two-tap delay-line pitch
+shifter (one line per channel, window 70 ms, taps half a window apart with a Hann crossfade, cubic
+reads; the tap phase moves by (1 − ratio)/window per sample). The shifted signal is band-limited
+(one-pole high-pass 140 Hz, two cascaded one-pole low-passes at 6.5 kHz, so the repeated shifts
+cannot pile up as metallic top end), scaled by 0.6·amount, soft-limited by y/(1 + |y|) and injected into the
+tank input of the next sample (L into half 0, R into half 1). The soft limit bounds the injection to
+±1 whatever the tank level, so the tail cannot run away; the loop guard (±8) stays. Measured
+(`tearwash_dsp_test`): +12 gives +36.8 dB at the octave, −12 +31.9 dB, +7 +17.7 dB; decay 60 s with
+amount 1 peaks at 2.5 or less after a full-scale noise burst.
+
+- The path fades in and out over 50 ms, is switched off in HOLD (the frozen tail stays as it is) and in
+  the ENSEMBLE program, and stops its work once it has faded out. Changing the interval moves the tap
+  phase smoothly (no click, a short glide).
+- `setSampleRate` allocates the shifter lines (window plus a few samples per channel); `process` and
+  `setControls` allocate nothing. Works at every sample rate (the window and corners are set from
+  times and frequencies).
+- No latency.
+

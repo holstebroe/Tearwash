@@ -12,6 +12,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 | TW5 | CPU profile and optimisation (SIMD for the tank taps) | ⬜ |
 | TW6 | macOS GUI glue | ⬜ |
 | TW7 | Tannhäuser integration (01 §4) | ⬜ deferred while Tannhäuser's UI is reworked on another branch |
+| TW8 | Shimmer in the engine (02 §7), requested by Plumeflow; not yet a plugin parameter | ✅ |
 
 ## Decision log
 
@@ -27,3 +28,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 
 - 2026-10-16 — Tearwash as its own single-engine reverb: engine, plugin, panel, 69 presets
   (loudness-matched), tests.
+- 2026-10-17 — Shimmer in the engine (TW8): a pitch-shifted feedback path with `shimmer`, `shimmerInterval`
+  and `shimmerMode` in `Controls` (02 §7), requested by Plumeflow's spec 09; bit-identical when off,
+  bounded at decay 60 s. `tearwash_dsp_test` gains the off/pitch/stability cases. The plugin panel does not expose it yet.
+

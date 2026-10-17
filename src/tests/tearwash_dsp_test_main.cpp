@@ -109,8 +109,86 @@ static void testReverb() {
         }
 }
 
+// Energy of x at frequency f (Goertzel), per sample.
+static double goertzel(const std::vector<float>& x, size_t a, size_t b, double f, double fs) {
+    const double w = 2.0 * M_PI * f / fs, c = 2.0 * std::cos(w);
+    double s1 = 0, s2 = 0;
+    for (size_t i = a; i < b; ++i) { const double s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+    const double re = s1 - s2 * std::cos(w), im = s2 * std::sin(w);
+    return (re * re + im * im) / double((b - a) * (b - a));
+}
+
+// Shimmer (docs/02_ENGINE.md §7): off is the old reverb bit for bit, a +12 interval puts energy an octave above the
+// input, and the feedback stays finite and bounded at decay 60 s, amount 1, for every interval.
+static void testShimmer() {
+    constexpr double fs = 48000.0;
+    auto run = [&](int prog, Controls c, double seconds, auto input, std::vector<float>* outA) {
+        static Reverb r;
+        r.setSampleRate(fs);
+        r.setProgram(prog);
+        r.setControls(c);
+        r.reset();
+        const size_t n = static_cast<size_t>(fs * seconds);
+        std::vector<float> in(n), a(n), b(n), cc(n), d(n);
+        for (size_t i = 0; i < n; ++i) in[i] = input(i);
+        bool ok = true;
+        double peak = 0.0;
+        for (size_t i = 0; i < n; i += 480) {
+            const int k = static_cast<int>(std::min<size_t>(480, n - i));
+            float* o[4] = { a.data() + i, b.data() + i, cc.data() + i, d.data() + i };
+            r.process(in.data() + i, in.data() + i, o, k);
+            for (int j = 0; j < k; ++j)
+                for (int ch = 0; ch < 4; ++ch) { ok = ok && std::isfinite(o[ch][j]); peak = std::max(peak, double(std::fabs(o[ch][j]))); }
+        }
+        if (outA) *outA = a;
+        return std::make_pair(ok, peak);
+    };
+    const auto sine = [&](size_t i) { return 0.3f * static_cast<float>(std::sin(2.0 * M_PI * 440.0 * double(i) / fs)); };
+    // Mode off (or amount 0) changes nothing.
+    {
+        Controls c = Reverb::programDefaults(0);
+        std::vector<float> ref, off, zero;
+        run(0, c, 1.0, sine, &ref);
+        c.shimmer = 1.0; c.shimmerMode = false;
+        run(0, c, 1.0, sine, &off);
+        c.shimmer = 0.0; c.shimmerMode = true;
+        run(0, c, 1.0, sine, &zero);
+        CHECK(ref == off && ref == zero, "shimmer off must be bit-identical to the plain reverb");
+    }
+    // Pitch: +12 and +7 put energy at the shifted frequency; the unshifted reverb has none there.
+    for (int st : { 12, 7, -12 }) {
+        Controls c = Reverb::programDefaults(0);
+        c.shimmerMode = true; c.shimmer = 0.8; c.shimmerInterval = st;
+        std::vector<float> a, base;
+        run(0, c, 4.0, sine, &a);
+        c.shimmerMode = false;
+        run(0, c, 4.0, sine, &base);
+        const double f = 440.0 * law::shimmerRatio(st);
+        const size_t t0 = size_t(1.5 * fs), t1 = size_t(4.0 * fs);
+        const double gain = 10.0 * std::log10(goertzel(a, t0, t1, f, fs) / (goertzel(base, t0, t1, f, fs) + 1e-30));
+        std::printf("shimmer %+d: %.1f dB at %.0f Hz\n", st, gain, f);
+        CHECK(gain > 15.0, "shimmer %+d: only %.1f dB more energy at %.0f Hz", st, gain, f);
+    }
+    // Stability: noise burst, then 60 s of tail at decay 60 s (just below hold), amount 1, each interval.
+    uint32_t x = 12345u;
+    const auto noise = [&](size_t i) {
+        x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+        return i < size_t(fs) ? static_cast<float>(static_cast<int32_t>(x) / 2147483648.0) : 0.f;
+    };
+    for (int prog : { 0, 5, 9 })
+        for (int st : { -12, -7, 5, 7, 12, 19, 24 }) {
+            Controls c = Reverb::programDefaults(prog);
+            c.lowDecay = 1.0; c.decay = 0.99; c.damping = 1.0; c.highCut = 1.0;
+            c.shimmerMode = true; c.shimmer = 1.0; c.shimmerInterval = st;
+            const auto res = run(prog, c, 60.0, noise, nullptr);
+            std::printf("%s shimmer %+d: peak %.2f\n", Reverb::programName(prog), st, res.second);
+            CHECK(res.first && res.second < 8.0, "%s shimmer %+d at decay 60 s: finite %d, peak %.2f", Reverb::programName(prog), st, res.first, res.second);
+        }
+}
+
 int main() {
     testReverb();
+    testShimmer();
     std::printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
