@@ -1,0 +1,29 @@
+# Tearwash — plan
+
+Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
+[03_PRESETS.md](03_PRESETS.md). Status: ✅ done, 🟡 in progress, ⬜ open.
+
+| ID | Work package | Status |
+| --- | --- | --- |
+| TW1 | Engine: figure-of-eight tank, ten programs, laws in units, hold, ensemble echo | ✅ |
+| TW2 | Plugin `tearwash.clap`: parameters, state, panel, headroom meter | ✅ |
+| TW3 | Presets: `.twpreset`, 69 factory presets (25 space), loudness trims, CLAP preset-load and discovery | ✅ |
+| TW4 | Tests: dsp, gui, preset | ✅ |
+| TW5 | CPU profile and optimisation (SIMD for the tank taps) | ⬜ |
+| TW6 | macOS GUI glue | ⬜ |
+| TW7 | Tannhäuser integration (01 §4) | ⬜ deferred while Tannhäuser's UI is reworked on another branch |
+
+## Decision log
+
+| Date | Decision |
+| --- | --- |
+| 2026-10-16 | Tearwash is a single-engine algorithmic reverb of our own; the plugin is named Tearwash (id `com.holstebroe.tearwash`). It is unreleased, so the parameter list starts fresh. |
+| 2026-10-16 | Hall delay set derived by a stated rule (02 §3); plate set from Dattorro's published plate with credit. |
+| 2026-10-16 | Neutral vocabulary for programs and controls (DECAY, LOW DECAY, DAMPING, DISTANCE, CLARITY, HIGH CUT, MOD RATE; GRAND HALL … VAST SPACE). |
+| 2026-10-16 | Factory decays stop at 58 s: the top of DECAY is the hold, which mutes the input, so it belongs to live use. |
+| 2026-10-16 | Tannhäuser keeps its legacy plate as default for existing sounds; Tearwash becomes `rev.model` 1 in TW7. |
+
+## Progress log
+
+- 2026-10-16 — Tearwash as its own single-engine reverb: engine, plugin, panel, 69 presets
+  (loudness-matched), tests.
