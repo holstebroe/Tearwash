@@ -284,10 +284,13 @@ void TwGui::drawControls(Graphics& g) {
                 const float y = y1 - static_cast<float>(norm(c.param)) * (y1 - y0);
                 const float hw = 14.f, hh = 7.5f;
                 softShadow(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, 3.f, 0.6f);
-                roundRect(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, [&](float, float v, float d) {
+                roundRect(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, [&](float u, float v, float d) {
                     Color col = mix(Color{ 0.33f, 0.345f, 0.36f }, Color{ 0.15f, 0.16f, 0.17f }, 0.5f + 0.5f * v);
                     if (hot) col = scale(col, 1.18f);
-                    return toArgb(mix(col, Color{ 0.50f, 0.52f, 0.54f }, smoothstep(-1.5f, -0.7f, d) * 0.7f), 1.f);
+                    // The edge is lit along the top and left, away from the shadow.
+                    const float lit = clamp01(0.5f - 0.5f * v + 0.35f * (u < -0.6f ? 1.f : 0.f));
+                    const Color edge = mix(Color{ 0.28f, 0.295f, 0.31f }, Color{ 0.66f, 0.68f, 0.70f }, lit);
+                    return toArgb(mix(col, edge, smoothstep(-1.5f, -0.7f, d) * 0.8f), 1.f);
                 });
                 drawLineAA(g, cx - hw + 3.f, y, cx + hw - 3.f, y, 1.6f, 0xFFE8ECEE);
                 label(g, c.label, cx, c.y + c.h + 4.f, kSilk, 7.2f);
@@ -304,10 +307,13 @@ void TwGui::drawControls(Graphics& g) {
                     const float dx = x - cx, dy = y - cy, d = std::sqrt(dx * dx + dy * dy);
                     const float cov = clamp01((R - d) * s + 0.5f);
                     if (cov <= 0.f) return 0u;
+                    // A subtle gradient, and a faint highlight on the rim at the top left (the shadow falls bottom right).
                     const float lit = std::hypot(dx + 0.3f * R, dy + 0.35f * R) / (1.5f * R);
-                    Color col = mix(Color{ 0.26f, 0.27f, 0.29f }, Color{ 0.085f, 0.09f, 0.10f }, smoothstep(0.f, 1.f, lit));
+                    Color col = mix(Color{ 0.165f, 0.175f, 0.19f }, Color{ 0.11f, 0.117f, 0.128f }, smoothstep(0.f, 1.f, lit));
                     if (hot) col = scale(col, 1.2f);
-                    col = mix(col, Color{ 0.34f, 0.355f, 0.375f }, smoothstep(R - 1.6f, R - 0.5f, d) * 0.8f);
+                    const float rim = smoothstep(R - 1.6f, R - 0.5f, d);
+                    const float facing = d > 1e-4f ? clamp01(-0.707f * (dx + dy) / d) : 0.f;
+                    col = mix(col, Color{ 0.56f, 0.58f, 0.60f }, rim * (0.12f + 0.55f * facing * facing));
                     const float along = dx * px + dy * py, perp = std::fabs(-dx * py + dy * px);
                     if (along > 0.3f * R && along < R - 2.f && perp < 0.9f) col = Color{ 0.93f, 0.95f, 0.96f };
                     return toArgb(col, cov);
