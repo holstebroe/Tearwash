@@ -35,7 +35,8 @@ namespace {
 constexpr int kScale = 2;
 constexpr uint32_t kSilk = 0xF2E6E6E0;
 constexpr uint32_t kSilkDim = 0xB09A9C98;
-constexpr uint32_t kLed = 0xFFFF4A2E;          // red LED display
+constexpr uint32_t kLed = 0xFFFF4A2E;          // red LED display (the preset name)
+constexpr uint32_t kValue = 0xFFFFD58A;        // the values above the controls: light amber, readable on the charcoal
 constexpr float kCap = 6.0f;
 
 void fill(Graphics& g, float x0, float y0, float x1, float y1, uint32_t argb) {
@@ -68,19 +69,6 @@ void softShadow(Graphics& g, float x0, float y0, float x1, float y1, float r, fl
 
 void label(Graphics& g, const char* text, float cx, float capTop, uint32_t ink = kSilk, float cap = kCap) {
     drawTextCentered(g, kLabelFont, text, cx, capTop, cap, ink);
-}
-
-void lamp(Graphics& g, float cx, float cy, float r, Color c, bool on) {
-    shadeBox(g, cx - r - 4, cy - r - 4, cx + r + 4, cy + r + 4, [&](float x, float y) {
-        const float d = std::hypot(x - cx, y - cy);
-        if (on) {
-            const float core = clamp01(r - d + 0.5f), glow = 0.35f * clamp01(1.f - (d - r) / 4.f);
-            const float a = std::max(core, glow);
-            return a > 0.f ? toArgb(mix(c, { 1.f, 1.f, 1.f }, core * 0.25f * clamp01(1.f - d / r)), a) : 0u;
-        }
-        const float a = clamp01(r - d + 0.5f);
-        return a > 0.f ? toArgb(scale(c, 0.22f), a) : 0u;
-    });
 }
 
 // What a control does, for the line at the bottom of the panel.
@@ -132,31 +120,33 @@ TwGui::~TwGui() {
 
 void TwGui::layout() {
     ctls_.clear();
+    // Programs in two rows of five.
     for (int i = 0; i < programCount(); ++i)
-        ctls_.push_back({ Kind::Program, -1, 20.f + i * 86.6f, 58.f, 80.f, 34.f, "", i });
+        ctls_.push_back({ Kind::Program, -1, 20.f + (i % 5) * 122.f, 60.f + (i / 5) * 38.f, 112.f, 32.f, "", i });
     // Preset bar: step, name (click: menu), save.
-    ctls_.push_back({ Kind::PresetPrev, -1, 312.f, 13.f, 20.f, 22.f, "<", 0 });
-    ctls_.push_back({ Kind::PresetName, -1, 336.f, 13.f, 190.f, 22.f, "", 0 });
-    ctls_.push_back({ Kind::PresetNext, -1, 530.f, 13.f, 20.f, 22.f, ">", 0 });
-    ctls_.push_back({ Kind::PresetSave, -1, 554.f, 13.f, 36.f, 22.f, "SAVE", 0 });
+    ctls_.push_back({ Kind::PresetPrev, -1, 352.f, 13.f, 20.f, 22.f, "<", 0 });
+    ctls_.push_back({ Kind::PresetName, -1, 376.f, 13.f, 180.f, 22.f, "", 0 });
+    ctls_.push_back({ Kind::PresetNext, -1, 560.f, 13.f, 20.f, 22.f, ">", 0 });
+    ctls_.push_back({ Kind::PresetSave, -1, 584.f, 13.f, 36.f, 22.f, "SAVE", 0 });
     // Decay, in signal order: the input cut, the band split, the two band decays, the loop damping.
     const struct { int p; const char* l; } decay[5] = {
         { TW_HIGHCUT, "IN CUT" }, { TW_CROSSOVER, "SPLIT FREQ" }, { TW_LOWDECAY, "LOW DECAY" }, { TW_DECAY, "HIGH DECAY" },
         { TW_DAMPING, "DAMP CUT" },
     };
-    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, decay[i].p, 20.f + i * 58.f, 138.f, 40.f, 112.f, decay[i].l, 0 });
+    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, decay[i].p, 60.f + i * 120.f, 184.f, 40.f, 100.f, decay[i].l, 0 });
     // Space, in signal order: the room's size, the predelay, the input diffusion, the tank's clarity, the early/late balance.
     const struct { int p; const char* l; } space[5] = {
         { TW_SIZE, "SIZE" }, { TW_PREDELAY, "PREDELAY" }, { TW_DIFFUSION, "DIFFUSION" }, { TW_CLARITY, "CLARITY" },
         { TW_DISTANCE, "DISTANCE" },
     };
-    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, space[i].p, 330.f + i * 58.f, 138.f, 40.f, 112.f, space[i].l, 0 });
-    ctls_.push_back({ Kind::Knob, TW_MIX, 650.f, 170.f, 46.f, 46.f, "MIX", 0 });
-    ctls_.push_back({ Kind::Knob, TW_OUTGAIN, 722.f, 170.f, 46.f, 46.f, "OUTPUT", 0 });
-    ctls_.push_back({ Kind::Knob, TW_MODRATE, 24.f, 316.f, 46.f, 46.f, "RATE", 0 });
-    ctls_.push_back({ Kind::Knob, TW_MODDEPTH, 86.f, 316.f, 46.f, 46.f, "DEPTH", 0 });
-    ctls_.push_back({ Kind::Knob, TW_SHIMMER, 334.f, 316.f, 46.f, 46.f, "AMOUNT", 0 });
-    ctls_.push_back({ Kind::Knob, TW_SHIMMERINT, 396.f, 316.f, 46.f, 46.f, "INTERVAL", 0 });
+    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, space[i].p, 60.f + i * 120.f, 348.f, 40.f, 100.f, space[i].l, 0 });
+    // Three groups of two knobs: motion, shimmer, level.
+    const struct { int p; const char* l; } knobs[6] = {
+        { TW_MODRATE, "RATE" }, { TW_MODDEPTH, "DEPTH" }, { TW_SHIMMER, "AMOUNT" }, { TW_SHIMMERINT, "INTERVAL" },
+        { TW_MIX, "MIX" }, { TW_OUTGAIN, "OUTPUT" },
+    };
+    for (int i = 0; i < 6; ++i)
+        ctls_.push_back({ Kind::Knob, knobs[i].p, 20.f + (i / 2) * 205.f + (i % 2) * 95.f + 20.f, 520.f, 54.f, 54.f, knobs[i].l, 0 });
 }
 
 int TwGui::controlAt(int x, int y) const {
@@ -208,8 +198,7 @@ std::string TwGui::stateKey() const {
         std::snprintf(buf, sizeof buf, "%.6g,", plugin_->paramValue(i));
         k += buf;
     }
-    std::snprintf(buf, sizeof buf, "|%d|%d|%d|%d|%d|%d|%d|%d|", hover_, active_, plugin_->headroomLeds(), plugin_->overload() ? 1 : 0,
-                  menuOpen_ ? 1 : 0, menuCat_, menuScroll_, menuHover_);
+    std::snprintf(buf, sizeof buf, "|%d|%d|%d|%d|%d|%d|", hover_, active_, menuOpen_ ? 1 : 0, menuCat_, menuScroll_, menuHover_);
     k += buf;
     k += plugin_->presetName() + (plugin_->presetModified() ? "*" : "");
     return k;
@@ -227,21 +216,18 @@ void TwGui::drawStatic(Graphics& g) {
     fill(g, 0, H - 2, W, H, 0xFF08090A);
     drawText(g, kDisplayFont, "TEARWASH", 20.f, 14.f, 16.f, 0xFFF0EEE6);
     drawText(g, kLabelFont, "ALGORITHMIC REVERB", 170.f, 19.f, 6.f, kSilkDim);
-    // Program row, then two rows of controls: decay, space and level; motion, shimmer and headroom.
-    drawText(g, kLabelFont, "PROGRAM", 20.f, 46.f, 5.f, kSilkDim);
-    label(g, "DECAY", 156.f, 110.f, kSilkDim, 5.f);
-    drawLineAA(g, 20, 118, 292, 118, 0.8f, kSilkDim);
-    label(g, "SPACE", 466.f, 110.f, kSilkDim, 5.f);
-    drawLineAA(g, 330, 118, 602, 118, 0.8f, kSilkDim);
-    label(g, "LEVEL", 710.f, 110.f, kSilkDim, 5.f);
-    drawLineAA(g, 640, 118, 880, 118, 0.8f, kSilkDim);
-    label(g, "MOTION", 78.f, 282.f, kSilkDim, 5.f);
-    drawLineAA(g, 20, 290, 140, 290, 0.8f, kSilkDim);
-    label(g, "SHIMMER", 388.f, 282.f, kSilkDim, 5.f);
-    drawLineAA(g, 330, 290, 446, 290, 0.8f, kSilkDim);
-    label(g, "HEADROOM", 740.f, 282.f, kSilkDim, 5.f);
-    drawLineAA(g, 640, 290, 880, 290, 0.8f, kSilkDim);
-    drawLineAA(g, 20, 376, 880, 376, 0.8f, kSilkDim);
+    // Programs, then decay and space faders, then three groups of knobs.
+    drawText(g, kLabelFont, "PROGRAM", 20.f, 47.f, 5.5f, kSilkDim);
+    label(g, "DECAY", 320.f, 148.f, kSilkDim, 6.f);
+    drawLineAA(g, 20, 157, 620, 157, 0.8f, kSilkDim);
+    label(g, "SPACE", 320.f, 314.f, kSilkDim, 6.f);
+    drawLineAA(g, 20, 323, 620, 323, 0.8f, kSilkDim);
+    static const char* kGroups[3] = { "MOTION", "SHIMMER", "LEVEL" };
+    for (int i = 0; i < 3; ++i) {
+        label(g, kGroups[i], 20.f + i * 205.f + 95.f, 480.f, kSilkDim, 6.f);
+        drawLineAA(g, 20.f + i * 205.f, 489.f, 210.f + i * 205.f, 489.f, 0.8f, kSilkDim);
+    }
+    drawLineAA(g, 20, 598, 620, 598, 0.8f, kSilkDim);
     // Fader slots and scales.
     for (const Ctl& c : ctls_) {
         if (c.kind == Kind::Fader) {
@@ -263,9 +249,6 @@ void TwGui::drawStatic(Graphics& g) {
             }
         }
     }
-    // Headroom meter prints.
-    static const char* kMeter[6] = { "-24", "-18", "-12", "-6", "0", "OVL" };
-    for (int i = 0; i < 6; ++i) label(g, kMeter[i], 672.f + i * 27.f, 322.f, kSilkDim, 4.6f);
 }
 
 void TwGui::drawControls(Graphics& g) {
@@ -274,7 +257,7 @@ void TwGui::drawControls(Graphics& g) {
     auto valueAbove = [&](const Ctl& c) {
         char buf[48];
         twValueText(static_cast<uint32_t>(c.param), plugin_->paramValue(static_cast<clap_id>(c.param)), buf, sizeof buf);
-        drawTextCentered(g, kDisplayFont, buf, c.x + c.w * 0.5f, c.y - 14.f, 5.2f, kLed);
+        drawTextCentered(g, kDisplayFont, buf, c.x + c.w * 0.5f, c.y - 16.f, 8.f, kValue);
     };
     for (size_t i = 0; i < ctls_.size(); ++i) {
         const Ctl& c = ctls_[i];
@@ -292,7 +275,7 @@ void TwGui::drawControls(Graphics& g) {
                     return toArgb(mix(col, scale(col, v < 0 ? 1.35f : 0.6f), smoothstep(-1.3f, 0.f, d) * 0.5f), 1.f);
                 });
                 const char* text = programName(c.aux);
-                float cap = 5.4f;
+                float cap = 6.4f;
                 while (cap > 3.6f && textWidth(kLabelFont, text, cap) > c.w - 8.f) cap -= 0.2f;
                 label(g, text, c.x + c.w * 0.5f, c.y + (c.h - cap) * 0.5f, sel ? 0xF0151515 : (en ? kSilk : 0x60A0A0A0), cap);
                 break;
@@ -311,7 +294,7 @@ void TwGui::drawControls(Graphics& g) {
                     return toArgb(mix(col, scale(col, v < 0 ? 1.3f : 0.6f), smoothstep(-1.4f, 0.f, d) * 0.6f), 1.f);
                 });
                 drawLineAA(g, cx - hw + 2.f, y, cx + hw - 2.f, y, 1.2f, 0xFF141414);
-                label(g, c.label, cx, c.y + c.h + 4.f, en ? kSilk : 0x60A0A0A0, 5.4f);
+                label(g, c.label, cx, c.y + c.h + 4.f, en ? kSilk : 0x60A0A0A0, 7.2f);
                 valueAbove(c);
                 break;
             }
@@ -332,7 +315,7 @@ void TwGui::drawControls(Graphics& g) {
                     if (along > 0.3f * R && along < R - 1.5f && perp < 1.1f) col = en ? Color{ 0.96f, 0.95f, 0.92f } : Color{ 0.4f, 0.4f, 0.4f };
                     return toArgb(col, cov);
                 });
-                label(g, c.label, cx, c.y + c.h + 3.f, en ? kSilk : 0x60A0A0A0);
+                label(g, c.label, cx, c.y + c.h + 3.f, en ? kSilk : 0x60A0A0A0, 7.2f);
                 valueAbove(c);
                 break;
             }
@@ -366,24 +349,19 @@ void TwGui::drawControls(Graphics& g) {
     // The description of the control under the pointer, on the line at the bottom.
     const std::string tip = tooltipText();
     const char* text = tip.empty() ? "Hover over a control to see what it does." : tip.c_str();
-    float cap = 6.2f;
-    while (cap > 4.6f && textWidth(kLabelFont, text, cap) > 850.f) cap -= 0.2f;
-    drawText(g, kLabelFont, text, 20.f, 386.f, cap, tip.empty() ? kSilkDim : kSilk);
-    // Headroom LEDs.
-    const int leds = plugin_->headroomLeds();
-    for (int i = 0; i < 5; ++i)
-        lamp(g, 672.f + i * 27.f, 312.f, 3.f, i < 3 ? Color{ 0.25f, 0.95f, 0.35f } : Color{ 1.f, 0.8f, 0.15f }, i < leds);
-    lamp(g, 672.f + 5 * 27.f, 312.f, 3.f, { 1.f, 0.2f, 0.1f }, plugin_->overload());
+    float cap = 7.f;
+    while (cap > 4.6f && textWidth(kLabelFont, text, cap) > 600.f) cap -= 0.2f;
+    drawText(g, kLabelFont, text, 20.f, 606.f, cap, tip.empty() ? kSilkDim : kSilk);
     if (menuOpen_) drawMenu(g);
 }
 
 // --- Preset menu ---------------------------------------------------------------------------------
 
 namespace {
-constexpr float kMenuX0 = 20.f, kMenuY0 = 42.f, kMenuX1 = 880.f, kMenuY1 = 314.f;
-constexpr float kCatX = 30.f, kCatY = 54.f, kCatH = 22.f, kCatW = 160.f;
-constexpr float kItemX = 204.f, kItemY = 54.f, kItemH = 16.f, kItemW = 224.f;
-constexpr int kItemRows = 15, kItemCols = 3, kItemPage = kItemRows * kItemCols;
+constexpr float kMenuX0 = 20.f, kMenuY0 = 42.f, kMenuX1 = 620.f, kMenuY1 = 314.f;
+constexpr float kCatX = 30.f, kCatY = 54.f, kCatH = 22.f, kCatW = 130.f;
+constexpr float kItemX = 176.f, kItemY = 54.f, kItemH = 16.f, kItemW = 220.f;
+constexpr int kItemRows = 15, kItemCols = 2, kItemPage = kItemRows * kItemCols;
 }
 
 void TwGui::openMenu() {

@@ -147,6 +147,8 @@ int main(int argc, char** argv) {
         CHECK(p.program() == 9, "host program change");
         CHECK(p.paramValue(TW_DECAY) == Reverb::programDefaults(9).decay, "VAST SPACE settings after host change (%.3f, plate %.3f)",
               p.paramValue(TW_DECAY), plateDecay);
+        CHECK(p.presetName() == "PG VAST SPACE" && !p.presetModified(), "the preset follows a host program change ('%s')",
+              p.presetName().c_str());
     }
     // A control change through the host keeps the program.
     {
@@ -219,6 +221,8 @@ int main(int argc, char** argv) {
         gui.handleMouseDown(x, y, false);
         gui.handleMouseUp();
         CHECK(p.program() == 4, "program button selects CHAMBER (%d)", p.program());
+        CHECK(p.presetName() == "PG CHAMBER" && !p.presetModified(), "the preset follows the program button ('%s')",
+              p.presetName().c_str());
         g_out.clear();
         std::vector<float> l(256, 0.f), r(256, 0.f), ol, orr;
         run(p, l, r, ol, orr);

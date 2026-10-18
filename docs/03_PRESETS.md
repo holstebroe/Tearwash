@@ -70,8 +70,12 @@ tools/preset_gains.json` → `python3 tools/gen_presets.py` → build. Trims spa
 - Preset bar in the header: `<` and `>` step through the whole list (also the mouse wheel over
   the name), the name shows `*` when any parameter differs from the loaded preset, SAVE saves.
 - Clicking the name opens the menu over the panel: categories on the left, the category's
-  presets in three columns (the wheel scrolls a column at a time), the current preset
+  presets in two columns (the wheel scrolls a column at a time), the current preset
   highlighted; a click loads a preset and closes the menu, a click outside closes it.
+- A program change, from the panel's buttons or from the host, makes the current preset that
+  program's PG preset (the program as stored); the modified marker then starts clear.
+- The panel is tall and narrow: the preset bar, the programs in two rows of five, the decay
+  faders, the space faders, then the motion, shimmer and level knobs. There is no meter.
 - Every fader and knob shows its current value above it. The line at the bottom says what the
   control under the pointer does; when nothing is under the pointer it shows a hint instead.
 

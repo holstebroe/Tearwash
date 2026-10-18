@@ -28,7 +28,7 @@ const TwPresetValue v20[] = { { "decay", 0.3852223655 }, { "damping", 0.88093897
 const TwPresetValue v21[] = { { "decay", 0.3141353088 }, { "damping", 1 }, { "mix", 0.25 }, { "outgain", 2.21 } };
 const TwPresetValue v22[] = { { "decay", 0.4747814653 }, { "mix", 0.28 }, { "outgain", 2.59 } };
 const TwPresetValue v23[] = { { "decay", 0.6103388593 }, { "lowdecay", 0.6103388593 }, { "predelay", 0.1414213562 }, { "mix", 0.3 }, { "outgain", 2.79 } };
-const TwPresetValue v24[] = { { "decay", 0.5252185347 }, { "damping", 1 }, { "modrate", 0.6 }, { "mix", 0.3 }, { "moddepth", 0.55 }, { "outgain", 2.79 } };
+const TwPresetValue v24[] = { { "decay", 0.5252185347 }, { "damping", 1 }, { "modrate", 0.6 }, { "shimmer", 0.4 }, { "shimmerint", 0.6666666667 }, { "mix", 0.3 }, { "moddepth", 0.55 }, { "outgain", 2.79 } };
 const TwPresetValue v25[] = { { "decay", 0.4860965043 }, { "lowdecay", 0.5252185347 }, { "mix", 0.28 }, { "outgain", 2.45 } };
 const TwPresetValue v26[] = { { "decay", 0.442816439 }, { "mix", 0.28 }, { "outgain", 2.59 } };
 const TwPresetValue v27[] = { { "decay", 0.4036944086 }, { "size", 0.7924812504 }, { "mix", 0.28 }, { "outgain", 2.71 } };
@@ -50,7 +50,7 @@ const TwPresetValue v42[] = { { "decay", 0.8393538435 }, { "lowdecay", 0.8393538
 const TwPresetValue v43[] = { { "decay", 0.9940563035 }, { "lowdecay", 0.9940563035 }, { "predelay", 0 }, { "modrate", 0.15 }, { "mix", 0.5 }, { "moddepth", 0.325 }, { "outgain", 1.61 } };
 const TwPresetValue v44[] = { { "decay", 0.9680349737 }, { "lowdecay", 0.9680349737 }, { "mix", 0.5 }, { "outgain", -0.81 } };
 const TwPresetValue v45[] = { { "decay", 0.7889167741 }, { "lowdecay", 0.8240988128 }, { "predelay", 0.5291502622 }, { "damping", 0.4627564263 }, { "mix", 0.45 }, { "outgain", 2.51 } };
-const TwPresetValue v46[] = { { "decay", 0.7682667868 }, { "lowdecay", 0.7682667868 }, { "modrate", 0.7 }, { "damping", 1 }, { "predelay", 0.3741657387 }, { "mix", 0.45 }, { "moddepth", 0.6 }, { "outgain", 3.73 } };
+const TwPresetValue v46[] = { { "decay", 0.7682667868 }, { "lowdecay", 0.7682667868 }, { "modrate", 0.7 }, { "damping", 1 }, { "predelay", 0.3741657387 }, { "shimmer", 0.5 }, { "shimmerint", 0.6666666667 }, { "mix", 0.45 }, { "moddepth", 0.6 }, { "outgain", 3.72 } };
 const TwPresetValue v47[] = { { "decay", 0.6858646912 }, { "lowdecay", 0.7178297175 }, { "size", 1 }, { "modrate", 0.5 }, { "predelay", 0.2449489743 }, { "mix", 0.45 }, { "moddepth", 0.5 }, { "outgain", 4.19 } };
 const TwPresetValue v48[] = { { "decay", 0.9940563035 }, { "lowdecay", 0.9940563035 }, { "predelay", 1 }, { "mix", 0.5 }, { "outgain", 2.48 } };
 const TwPresetValue v49[] = { { "decay", 0.6467426608 }, { "lowdecay", 0.6673926481 }, { "predelay", 0.8660254038 }, { "mix", 0.45 }, { "outgain", 3.94 } };
@@ -106,7 +106,7 @@ const TwBuiltinPreset kTwBuiltinPresets[] = {
     { "PL Snare Plate Eighty-Two", "PLATE", v21, 4 },
     { "PL Dense Silk Plate", "DENSE PLATE", v22, 3 },
     { "PL Long Steel Plate", "PLATE", v23, 5 },
-    { "PL Bright Shimmer Plate", "DENSE PLATE", v24, 6 },
+    { "PL Bright Shimmer Plate", "DENSE PLATE", v24, 8 },
     { "PL Rich Plate Bloom", "PLATE", v25, 4 },
     { "PL Classic Dense Plate", "DENSE PLATE", v26, 3 },
     { "PL Twin Plates Wide", "VOCAL PLATE", v27, 4 },
@@ -128,7 +128,7 @@ const TwBuiltinPreset kTwBuiltinPresets[] = {
     { "SP Frozen Nebula", "VAST SPACE", v43, 7 },
     { "SP Near Infinity Chamber", "CHAMBER", v44, 4 },
     { "SP Empty Highway Haze", "GRAND HALL", v45, 6 },
-    { "SP Diamond Dust Shimmer", "DENSE PLATE", v46, 8 },
+    { "SP Diamond Dust Shimmer", "DENSE PLATE", v46, 10 },
     { "SP Aurora Curtain Wash", "VAST SPACE", v47, 8 },
     { "SP Deep Space Relay", "VAST SPACE", v48, 5 },
     { "SP Nebula Long Delay", "VAST SPACE", v49, 5 },

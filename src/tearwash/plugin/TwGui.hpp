@@ -1,10 +1,10 @@
 #ifndef TEARWASH_TWGUI_HPP
 #define TEARWASH_TWGUI_HPP
 
-// Tearwash panel: drawn procedurally at 2× and box-filtered (Tannhäuser GUI rules): program
-// buttons, the decay and space faders, the motion and shimmer knobs, the level knobs, the preset
-// bar, the headroom meter, and a one-line description at the bottom for the control under the
-// pointer. Each control shows its value above it. X11 / Win32 glue as in Tannhäuser's GuiWindow.
+// Tearwash panel: drawn procedurally at 2× and box-filtered (Tannhäuser GUI rules), top to bottom:
+// the preset bar, the program buttons (two rows), the decay faders, the space faders, the motion,
+// shimmer and level knobs, and a one-line description of the control under the pointer. Each
+// control shows its value above it. X11 / Win32 glue as in Tannhäuser's GuiWindow.
 
 #include <clap/clap.h>
 #include <clap/ext/gui.h>
@@ -25,7 +25,7 @@ extern const clap_plugin_gui_t g_tearwashGuiExtension;
 
 class TwGui {
 public:
-    static constexpr uint32_t kWidth = 900, kHeight = 412;
+    static constexpr uint32_t kWidth = 640, kHeight = 628;
 
     enum class Kind { Fader, Knob, Program, PresetPrev, PresetName, PresetNext, PresetSave };
     struct Ctl {

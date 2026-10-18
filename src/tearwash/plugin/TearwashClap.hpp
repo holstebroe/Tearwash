@@ -60,9 +60,6 @@ public:
     void selectProgram(int program);
 
     int program() const { return clampProgram(static_cast<int>(paramValue(TW_PROGRAM))); }
-    // Input level for the headroom meter: 0 (below −24 dBFS) … 5 LEDs 6 dB apart.
-    int headroomLeds() const { return headroom_.load(std::memory_order_relaxed); }
-    bool overload() const { return overload_.load(std::memory_order_relaxed); }
 
     // Presets (main or GUI thread, like selectProgram). Loading sets every parameter and tells the
     // host about each change.
@@ -116,9 +113,6 @@ private:
     uint32_t maxFrames_ = 0;
     double inGain_ = 1.0, outGain_ = 1.0, mix_ = 0.35;
     double gainCoef_ = 0.001;
-    std::atomic<int> headroom_{ 0 };
-    std::atomic<bool> overload_{ false };
-    float peakHold_ = 0.f;
     void render(const float* inL, const float* inR, float* outL, float* outR, uint32_t n);
 
     std::atomic<bool> stateDirty_{ false };

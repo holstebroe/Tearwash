@@ -6,7 +6,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 | ID | Work package | Status |
 | --- | --- | --- |
 | TW1 | Engine: figure-of-eight tank, ten programs, laws in units, hold, ensemble echo | ✅ |
-| TW2 | Plugin `tearwash.clap`: parameters, state, panel, headroom meter | ✅ |
+| TW2 | Plugin `tearwash.clap`: parameters, state, panel | ✅ |
 | TW3 | Presets: `.twpreset`, 75 factory presets (28 space, 6 with shimmer), loudness trims, CLAP preset-load and discovery | ✅ |
 | TW4 | Tests: dsp, gui, preset | ✅ |
 | TW5 | CPU profile and optimisation (SIMD for the tank taps) | ⬜ |
@@ -39,3 +39,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 - 2026-10-18 — Six shimmer presets (three plates, three space), 75 factory presets in all; loudness
   trims refitted. The two existing "Shimmer" names (PL Bright Shimmer Plate, SP Diamond Dust Shimmer)
   still have shimmer off.
+- 2026-10-18 — Panel layout: tall and narrow (640 × 628), programs in two rows, larger labels and light-amber
+  values, level knobs beside motion and shimmer, headroom meter removed (it only showed the input peak).
+  A program change from the panel or the host makes the preset that program's PG preset. PL Bright Shimmer
+  Plate and SP Diamond Dust Shimmer now set shimmer.
