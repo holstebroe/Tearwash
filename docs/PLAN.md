@@ -46,3 +46,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 - 2026-10-18 — Panel look: dark rounded buttons (the selected program has a light outline), dark fader caps
   with a light centre line, plain dark knobs with a thin pointer, a diagonal blue-grey gradient, a light
   preset name instead of the red LED; the preset menu follows.
+- 2026-10-18 — Panel redraw cost: a redraw after a change fell from about 10.7 ms to 3.7 ms (idle frames cost
+  nothing). The idle buttons, the knob shadows and the labels are drawn once into the cached background; only
+  the selected or hovered button, the fader caps, the knob bodies and the values are redrawn, and the 2x2
+  downsample works on two channels at a time.

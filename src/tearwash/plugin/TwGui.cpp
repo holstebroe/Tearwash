@@ -71,8 +71,8 @@ void label(Graphics& g, const char* text, float cx, float capTop, uint32_t ink =
 }
 
 // A dark rounded button with a light edge; selected: a bright outline.
-void button(Graphics& g, float x0, float y0, float x1, float y1, float r, bool selected, bool hot) {
-    softShadow(g, x0, y0, x1, y1, r, 3.f, 0.5f);
+void button(Graphics& g, float x0, float y0, float x1, float y1, float r, bool selected, bool hot, bool shadow = true) {
+    if (shadow) softShadow(g, x0, y0, x1, y1, r, 3.f, 0.5f);
     const Color edge = selected ? Color{ 0.88f, 0.90f, 0.92f } : Color{ 0.30f, 0.315f, 0.33f };
     const float bw = selected ? 1.5f : 1.f;
     roundRect(g, x0, y0, x1, y1, r, [&](float, float v, float d) {
@@ -81,6 +81,13 @@ void button(Graphics& g, float x0, float y0, float x1, float y1, float r, bool s
         if (hot) fill = scale(fill, 1.15f);
         return toArgb(mix(fill, edge, smoothstep(-bw - 0.7f, -bw, d)), 1.f);
     });
+}
+
+void programLabel(Graphics& g, const TwGui::Ctl& c, bool sel) {
+    const char* text = programName(c.aux);
+    float cap = 6.4f;
+    while (cap > 3.6f && textWidth(kLabelFont, text, cap) > c.w - 8.f) cap -= 0.2f;
+    label(g, text, c.x + c.w * 0.5f, c.y + (c.h - cap) * 0.5f, sel ? 0xFFFFFFFF : kSilk, cap);
 }
 
 // What a control does, for the line at the bottom of the panel.
@@ -254,6 +261,31 @@ void TwGui::drawStatic(Graphics& g) {
             drawLineAA(g, c.x + c.w - 2.f - len, y, c.x + c.w - 2.f, y, 0.8f, 0x70A8B0B4);
         }
     }
+    // What does not change with a value or a selection, so that a redraw need not repeat it: the knobs'
+    // shadows, the labels, and the idle buttons (the selected or hovered one is drawn over its idle self).
+    for (const Ctl& c : ctls_) {
+        switch (c.kind) {
+            case Kind::Fader: label(g, c.label, c.x + c.w * 0.5f, c.y + c.h + 4.f, kSilk, 7.2f); break;
+            case Kind::Knob: {
+                const float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f, R = c.w * 0.5f - 7.f;
+                softShadow(g, cx - R, cy - R, cx + R, cy + R, R, 3.f, 0.6f);
+                label(g, c.label, cx, c.y + c.h + 3.f, kSilk, 7.2f);
+                break;
+            }
+            case Kind::Program:
+                if (c.aux >= programCount()) break;
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 5.f, false, false);
+                programLabel(g, c, false);
+                break;
+            case Kind::PresetPrev:
+            case Kind::PresetNext:
+            case Kind::PresetSave:
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, false, false);
+                label(g, c.label, c.x + c.w * 0.5f, c.y + (c.h - 5.f) * 0.5f, kSilk, 5.f);
+                break;
+            default: break;
+        }
+    }
 }
 
 void TwGui::drawControls(Graphics& g) {
@@ -269,13 +301,10 @@ void TwGui::drawControls(Graphics& g) {
         const bool hot = static_cast<int>(i) == hover_ || static_cast<int>(i) == active_;
         switch (c.kind) {
             case Kind::Program: {
-                if (c.aux >= programCount()) break;
                 const bool sel = c.aux == pg;
-                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 5.f, sel, hot);
-                const char* text = programName(c.aux);
-                float cap = 6.4f;
-                while (cap > 3.6f && textWidth(kLabelFont, text, cap) > c.w - 8.f) cap -= 0.2f;
-                label(g, text, c.x + c.w * 0.5f, c.y + (c.h - cap) * 0.5f, sel ? 0xFFFFFFFF : kSilk, cap);
+                if (c.aux >= programCount() || !(sel || hot)) break;
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 5.f, sel, hot, false);
+                programLabel(g, c, sel);
                 break;
             }
             case Kind::Fader: {
@@ -293,7 +322,6 @@ void TwGui::drawControls(Graphics& g) {
                     return toArgb(mix(col, edge, smoothstep(-1.5f, -0.7f, d) * 0.8f), 1.f);
                 });
                 drawLineAA(g, cx - hw + 3.f, y, cx + hw - 3.f, y, 1.6f, 0xFFE8ECEE);
-                label(g, c.label, cx, c.y + c.h + 4.f, kSilk, 7.2f);
                 valueAbove(c);
                 break;
             }
@@ -302,7 +330,6 @@ void TwGui::drawControls(Graphics& g) {
                 const float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f, R = c.w * 0.5f - 7.f;
                 const float a = (120.f + 300.f * static_cast<float>(norm(c.param))) * kPi / 180.f;
                 const float px = std::cos(a), py = std::sin(a), s = static_cast<float>(g.getScale());
-                softShadow(g, cx - R, cy - R, cx + R, cy + R, R, 3.f, 0.6f);
                 shadeBox(g, cx - R - 1, cy - R - 1, cx + R + 1, cy + R + 1, [&](float x, float y) {
                     const float dx = x - cx, dy = y - cy, d = std::sqrt(dx * dx + dy * dy);
                     const float cov = clamp01((R - d) * s + 0.5f);
@@ -318,14 +345,14 @@ void TwGui::drawControls(Graphics& g) {
                     if (along > 0.3f * R && along < R - 2.f && perp < 0.9f) col = Color{ 0.93f, 0.95f, 0.96f };
                     return toArgb(col, cov);
                 });
-                label(g, c.label, cx, c.y + c.h + 3.f, kSilk, 7.2f);
                 valueAbove(c);
                 break;
             }
             case Kind::PresetPrev:
             case Kind::PresetNext:
             case Kind::PresetSave: {
-                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, false, hot);
+                if (!hot) break;
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, false, true, false);
                 label(g, c.label, c.x + c.w * 0.5f, c.y + (c.h - 5.f) * 0.5f, kSilk, 5.f);
                 break;
             }
@@ -503,16 +530,17 @@ void TwGui::renderFrame() {
     compose_ = static_;
     Graphics g(compose_.data(), kWidth, kHeight, kScale);
     drawControls(g);
-    // 2×2 box filter.
+    // 2×2 box filter, two channels at a time (red and blue, then green and alpha, in 16-bit lanes).
+    constexpr uint32_t kLanes = 0x00FF00FFu;
     for (uint32_t y = 0; y < kHeight; ++y) {
+        const uint32_t* top = &compose_[static_cast<size_t>(y) * 2 * BW];
+        const uint32_t* bottom = top + BW;
+        uint32_t* out = &pixels_[static_cast<size_t>(y) * kWidth];
         for (uint32_t x = 0; x < kWidth; ++x) {
-            uint32_t r = 0, gg = 0, b = 0;
-            for (int dy = 0; dy < 2; ++dy)
-                for (int dx = 0; dx < 2; ++dx) {
-                    const uint32_t p = compose_[static_cast<size_t>(y * 2 + dy) * BW + x * 2 + dx];
-                    r += (p >> 16) & 0xFF; gg += (p >> 8) & 0xFF; b += p & 0xFF;
-                }
-            pixels_[static_cast<size_t>(y) * kWidth + x] = 0xFF000000u | ((r / 4) << 16) | ((gg / 4) << 8) | (b / 4);
+            const uint32_t a = top[2 * x], b = top[2 * x + 1], c = bottom[2 * x], d = bottom[2 * x + 1];
+            const uint32_t rb = (a & kLanes) + (b & kLanes) + (c & kLanes) + (d & kLanes);
+            const uint32_t ga = ((a >> 8) & kLanes) + ((b >> 8) & kLanes) + ((c >> 8) & kLanes) + ((d >> 8) & kLanes);
+            out[x] = 0xFF000000u | ((rb >> 2) & kLanes) | (((ga >> 2) & kLanes) << 8);
         }
     }
 #if defined(__linux__) && !defined(__APPLE__)
