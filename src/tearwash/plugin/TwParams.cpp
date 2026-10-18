@@ -14,10 +14,10 @@ namespace {
 
 TwParamInfo g_info[TW_PARAM_COUNT] = {
     { "program",    "Program",       "Program", 0, Reverb::kPrograms - 1, 0, TwKind::Choice },
-    { "decay",      "Decay",         "Decay",   0, 1, 0, TwKind::Unit },
+    { "decay",      "High Decay",    "Decay",   0, 1, 0, TwKind::Unit },
     { "lowdecay",   "Low Decay",     "Decay",   0, 1, 0, TwKind::Unit },
-    { "crossover",  "Crossover",     "Decay",   0, 1, 0, TwKind::Unit },
-    { "damping",    "Damping",       "Decay",   0, 1, 0, TwKind::Unit },
+    { "crossover",  "Split Freq",    "Decay",   0, 1, 0, TwKind::Unit },
+    { "damping",    "Damp Cut",      "Decay",   0, 1, 0, TwKind::Unit },
     { "distance",   "Distance",      "Space",   0, 1, 0, TwKind::Unit },
     { "predelay",   "Predelay",      "Space",   0, 1, 0, TwKind::Unit },
     { "diffusion",  "Diffusion",     "Space",   0, 1, 0, TwKind::Unit },
@@ -26,10 +26,13 @@ TwParamInfo g_info[TW_PARAM_COUNT] = {
     { "rear",       "Rear Outputs",  "Output",  0, 1, 0, TwKind::Toggle },
     { "size",       "Size",          "Space",   0, 1, 0, TwKind::Unit },
     { "clarity",    "Clarity",       "Space",   0, 1, 0, TwKind::Unit },
-    { "highcut",    "High Cut",      "Decay",   0, 1, 0, TwKind::Unit },
+    { "highcut",    "In Cut",        "Decay",   0, 1, 0, TwKind::Unit },
     { "mix",        "Mix",           "Output",  0, 1, 0.35, TwKind::Percent },
     { "ingain",     "Input Gain",    "Output",  -12, 12, 0, TwKind::Decibel },
     { "outgain",    "Output Gain",   "Output",  kOutGainFloorDb, 12, 0, TwKind::Decibel },
+    { "moddepth",   "Mod Depth",     "Motion",  0, 1, 0.5, TwKind::Unit },
+    { "shimmer",    "Shimmer",       "Shimmer", 0, 1, 0, TwKind::Unit },
+    { "shimmerint", "Shimmer Interval", "Shimmer", 0, 1, 2.0 / 3.0, TwKind::Unit },   // +12 st
 };
 
 // Defaults: the first program's stored settings.
@@ -42,6 +45,7 @@ bool initDefaults() {
     };
     for (const auto& m : map) g_info[m.id].def = m.v;
     g_info[TW_MODULATION].def = c.modulation ? 1.0 : 0.0;
+    g_info[TW_MODDEPTH].def = c.modDepth;
     return true;
 }
 
@@ -105,6 +109,7 @@ void twValueText(uint32_t id, double v, char* buf, uint32_t cap) {
         case TW_PREDELAY: std::snprintf(buf, cap, "%.0f ms", law::predelayMs(v)); return;
         case TW_SIZE: std::snprintf(buf, cap, "x%.2f", law::sizeScale(v)); return;
         case TW_MODRATE: std::snprintf(buf, cap, "%.2f Hz", law::modRateHz(v)); return;
+        case TW_SHIMMERINT: std::snprintf(buf, cap, "%+d st", law::shimmerSemitones(v)); return;
         default: std::snprintf(buf, cap, "%.0f %%", v * 100.0); return;
     }
 }
@@ -135,6 +140,7 @@ bool twTextToValue(uint32_t id, const char* text, double* out) {
             case TW_PREDELAY: v = std::sqrt(d / 1000.0); break;
             case TW_SIZE: v = std::log(std::max(d, 0.5) / 0.5) / std::log(4.0); break;
             case TW_MODRATE: v = std::log(std::max(d, 0.1) / 0.1) / std::log(50.0); break;
+            case TW_SHIMMERINT: v = law::shimmerStored(static_cast<int>(std::lround(d))); break;
             default: v = d / 100.0; break;
         }
         if (id == TW_DECAY && v >= law::kHold) v = law::kHold - 0.001;   // a time, not the hold

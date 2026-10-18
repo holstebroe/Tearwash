@@ -124,6 +124,10 @@ Controls TearwashClap::controls() const {
     c.diffusion = paramValue(TW_DIFFUSION); c.modRate = paramValue(TW_MODRATE); c.size = paramValue(TW_SIZE);
     c.clarity = paramValue(TW_CLARITY); c.highCut = paramValue(TW_HIGHCUT);
     c.modulation = paramValue(TW_MODULATION) >= 0.5;
+    c.modDepth = paramValue(TW_MODDEPTH);
+    c.shimmer = paramValue(TW_SHIMMER);
+    c.shimmerInterval = law::shimmerSemitones(paramValue(TW_SHIMMERINT));
+    c.shimmerMode = c.shimmer > 0.0;
     return c;
 }
 
@@ -133,7 +137,12 @@ void TearwashClap::loadProgramSettings(int pg) {
     targetProgram_.store(pg);
     const TwValues v = twProgramValues(pg);
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i)
-        if (i != TW_MIX && i != TW_INGAIN && i != TW_OUTGAIN && i != TW_REAR) setValue(i, v[i]);
+        if (i != TW_MIX && i != TW_INGAIN && i != TW_OUTGAIN && i != TW_REAR && i != TW_SHIMMER && i != TW_SHIMMERINT)
+            setValue(i, v[i]);
+    // The preset follows the program (from the panel or the host): it becomes the program as stored.
+    std::lock_guard<std::mutex> lock(presetMutex_);
+    presetName_ = std::string("PG ") + programName(pg);
+    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) presetValues_[i] = paramValue(i);
 }
 
 void TearwashClap::selectProgram(int pg) {
@@ -234,14 +243,12 @@ void TearwashClap::render(const float* inL, const float* inR, float* outL, float
     const double og = paramValue(TW_OUTGAIN);
     const double outTarget = og <= kOutGainFloorDb ? 0.0 : std::pow(10.0, og / 20.0);
     const double mixTarget = paramValue(TW_MIX);
-    float peak = 0.f;
     double ig = inGain_;
     for (uint32_t i = 0; i < n; ++i) {
         ig += (inTarget - ig) * gainCoef_;
         const float l = inL ? inL[i] : 0.f, r = inR ? inR[i] : l;
         xl[i] = static_cast<float>(l * ig);
         xr[i] = static_cast<float>(r * ig);
-        peak = std::max(peak, std::max(std::fabs(xl[i]), std::fabs(xr[i])));
     }
     inGain_ = ig;
 
@@ -262,15 +269,6 @@ void TearwashClap::render(const float* inL, const float* inR, float* outL, float
     }
     mix_ = mx;
     outGain_ = go;
-
-    // Headroom meter: five LEDs 6 dB apart up to full scale.
-    peakHold_ = std::max(peak, peakHold_ * static_cast<float>(std::exp(-double(n) / (0.3 * fs_))));
-    static const float kLed[5] = { 0.056f, 0.112f, 0.224f, 0.448f, 0.89f };
-    int leds = 0;
-    while (leds < 5 && peakHold_ >= kLed[leds]) ++leds;
-    headroom_.store(leds, std::memory_order_relaxed);
-    if (peak >= 1.0f) overload_.store(true, std::memory_order_relaxed);
-    else if (peakHold_ < 0.5f) overload_.store(false, std::memory_order_relaxed);
 }
 
 clap_process_status TearwashClap::process(const clap_process_t* process) {

@@ -41,6 +41,11 @@ def main():
         if name in names:
             sys.exit('duplicate preset name: ' + name)
         names.add(name)
+        vals = dict(vals)
+        # A preset that sets MOD RATE keeps the depth it had before MOD DEPTH existed (excursion × (0.5 + rate),
+        # which is 2 × depth × excursion with depth = (0.5 + rate) / 2), unless it sets MOD DEPTH itself.
+        if 'modrate' in vals and 'moddepth' not in vals:
+            vals['moddepth'] = round((0.5 + vals['modrate']) / 2.0, 6)
         if name[:3] not in ('HL ', 'RM ', 'PL ', 'SP ', 'EC ', 'FX '):
             sys.exit('bad category: ' + name)
         if prog not in programs:

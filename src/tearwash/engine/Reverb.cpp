@@ -8,6 +8,13 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
+// Shimmer [A] (docs/02_ENGINE.md §7): shifter window, band limits of the fed-back signal, and the
+// feedback level at amount 1 (before the soft limit).
+constexpr double kShimmerWindowMs = 70.0;
+constexpr double kShimmerLowHz = 140.0, kShimmerHighHz = 6500.0;
+constexpr double kShimmerTap = 0.25;      // the output taps sum seven tank taps
+constexpr double kShimmerFeedback = 0.6;
+
 // The programs [A]. Delays in ms at SIZE ×1: four input diffusers, then per tank half the
 // modulated allpass, the first delay, the two decay diffusers and the delay into the other half.
 // Hall set (02 §3): input diffusers a geometric series 5.3·1.55^k ms; tank halves of ≈ 190 and
@@ -37,6 +44,7 @@ Controls def(double lowDecay, double decay, double crossover, double damping, do
     Controls c;
     c.lowDecay = lowDecay; c.decay = decay; c.crossover = crossover; c.damping = damping; c.distance = distance;
     c.predelay = pre; c.diffusion = dif; c.modRate = modRate; c.size = size; c.clarity = clarity; c.highCut = highCut;
+    c.modDepth = 0.5 * (0.5 + modRate);   // the depth that gave excursion × (0.5 + rate) before MOD DEPTH existed
     return c;
 }
 
@@ -131,6 +139,8 @@ void Reverb::setSampleRate(double fs) {
         h.d2.init(tankMax[4] + 4);
     }
     for (auto& v : voice_) v.init(60.0 * 2.0 * ms + 8.0 * ms);
+    shim_.window = kShimmerWindowMs * ms;
+    for (auto& d : shim_.line) d.init(shim_.window + 16.0);
     allocated_ = true;
     slew_ = 1.0 - std::exp(-1.0 / (0.25 * fs));   // lengths glide over ≈ 0.25 s
     for (int k = 0; k < 8; ++k) vWander_[k].rng = 0x9E3779B9u * static_cast<uint32_t>(k + 1);
@@ -166,6 +176,12 @@ void Reverb::reset() {
     for (int k = 0; k < 4; ++k) inLen_[k] = inTarget_[k];
     fb_[0] = fb_[1] = 0.0;
     inGain_ = inGainTarget_;
+    for (auto& d : shim_.line) d.clear();
+    for (int ch = 0; ch < 2; ++ch) shim_.hp[ch].y = shim_.lp1[ch].y = shim_.lp2[ch].y = 0.0;
+    shim_.phase = 0.0;
+    shimFb_[0] = shimFb_[1] = 0.0;
+    shimGain_ = shimGainTarget_;
+    shimOn_ = shimGainTarget_ > 0.0;
 }
 
 // Targets from the program and the controls; gains from the target lengths.
@@ -182,7 +198,7 @@ void Reverb::configure() {
     gIn_ = 0.75 * c_.diffusion;
     gDif_ = 0.70 * c_.diffusion;
     gClar_ = 0.70 - 0.55 * c_.clarity;
-    modDepth_ = c_.modulation ? s.modMs * ms * (0.5 + c_.modRate) : 0.0;
+    modDepth_ = c_.modulation ? s.modMs * ms * 2.0 * c_.modDepth : 0.0;
     modPeriod_ = fs_ / law::modRateHz(c_.modRate);
     wLate_ = 0.35 + 0.65 * c_.distance;
     wEarly_ = 1.0 - c_.distance;
@@ -207,6 +223,14 @@ void Reverb::configure() {
     static const double kPan[8] = { -0.9, 0.7, -0.5, 0.3, -0.2, 0.5, -0.7, 0.9 };
     for (int k = 0; k < 8; ++k) { vBase_[k] = kBase[k] * law::sizeScale(c_.size) * ms; vPan_[k] = kPan[k]; }
     fbGain_ = hold_ ? 0.0 : 0.85 * std::min(1.0, c_.decay * 1.1);
+    // Shimmer: off in hold (the frozen tail stays as it is) and in the ensemble program.
+    const double amount = c_.shimmer < 0.0 ? 0.0 : (c_.shimmer > 1.0 ? 1.0 : c_.shimmer);
+    shimGainTarget_ = (c_.shimmerMode && !hold_ && s.kind == 0) ? kShimmerFeedback * amount : 0.0;
+    if (shimGainTarget_ > 0.0) shimOn_ = true;
+    const int st = c_.shimmerInterval < -24 ? -24 : (c_.shimmerInterval > 24 ? 24 : c_.shimmerInterval);
+    shimRate_ = (1.0 - law::shimmerRatio(st)) / std::max(1.0, shim_.window);
+    const double lo = onePole(kShimmerLowHz, fs_), hi = onePole(kShimmerHighHz, fs_);
+    for (int ch = 0; ch < 2; ++ch) { shim_.hp[ch].a = lo; shim_.lp1[ch].a = shim_.lp2[ch].a = hi; }
 }
 
 // ---- Processing ----------------------------------------------------------------------------------
@@ -242,7 +266,7 @@ void Reverb::runTank(double xl, double xr, double& oa, double& ob, double& oc, d
     const double cross[2] = { h_[1].d2.lin(h_[1].d2Len), h_[0].d2.lin(h_[0].d2Len) };
     for (int k = 0; k < 2; ++k) {
         Half& h = h_[k];
-        double u = inGain_ * x[k] + cross[k];
+        double u = inGain_ * x[k] + cross[k] + shimFb_[k];
         // Modulated allpass (cubic interpolation, smooth random glide).
         const double m = modDepth_ > 0.0 ? modDepth_ * h.wander.run(modPeriod_, 4.0 / modPeriod_) : 0.0;
         const double z = h.ap.cub(h.apBase + modDepth_ + m);
@@ -276,6 +300,29 @@ void Reverb::runTank(double xl, double xr, double& oa, double& ob, double& oc, d
                          + t(a.dif1, a.dif1Len, 0.5);
     const double lateD = t(a.d1, a.d1Len, 0.37) - t(a.d2, a.d2Len, 0.77) + t(c.d1, c.d1Len, 0.89) - t(c.d2, c.d2Len, 0.67)
                          + t(c.dif1, c.dif1Len, 0.5);
+    if (shimOn_) {
+        // Shimmer: the pitch-shifted, band-limited, soft-limited tank output goes back into the tank input
+        // of the next sample. The soft limit bounds the injection to ±1 whatever the tank level, so the
+        // tail cannot run away (the loop guard still holds at ±8).
+        Shifter& sh = shim_;
+        const double tap[2] = { kShimmerTap * lateA, kShimmerTap * lateC };
+        sh.phase += shimRate_;
+        sh.phase -= std::floor(sh.phase);
+        double pB = sh.phase + 0.5;
+        pB -= std::floor(pB);
+        // Smoothstep crossfade (no libm per sample): tap A is silent where it wraps, and wA + wB = 1.
+        const double q = 1.0 - std::fabs(2.0 * sh.phase - 1.0);
+        const double wA = q * q * (3.0 - 2.0 * q), wB = 1.0 - wA;   // the taps sit half a window apart
+        const double dA = 3.0 + sh.phase * sh.window, dB = 3.0 + pB * sh.window;
+        for (int ch = 0; ch < 2; ++ch) {
+            sh.line[ch].push(static_cast<float>(tap[ch]));
+            double y = wA * sh.line[ch].cub(dA) + wB * sh.line[ch].cub(dB);
+            y -= sh.hp[ch].run(y);   // high-pass: the low-pass state subtracted
+            y = sh.lp2[ch].run(sh.lp1[ch].run(y));
+            y *= shimGain_;
+            shimFb_[ch] = guard(y / (1.0 + std::fabs(y)));
+        }
+    }
     const double gl = 0.60 * wLate_, ge = 0.90 * wEarly_ * inGain_;   // wet ≈ −9 dB of dry
     oa = gl * lateA + ge * (0.7 * e[0][0] + 0.5 * e[0][1]);
     oc = gl * lateC + ge * (0.7 * e[1][0] + 0.5 * e[1][1]);
@@ -331,6 +378,13 @@ void Reverb::process(const float* inL, const float* inR, float* const* out, int 
         }
         if (inGain_ < inGainTarget_) inGain_ = std::min(inGainTarget_, inGain_ + gainStep);
         else if (inGain_ > inGainTarget_) inGain_ = std::max(inGainTarget_, inGain_ - gainStep);
+        if (shimGain_ < shimGainTarget_) shimGain_ = std::min(shimGainTarget_, shimGain_ + gainStep);
+        else if (shimGain_ > shimGainTarget_) shimGain_ = std::max(shimGainTarget_, shimGain_ - gainStep);
+        if (shimOn_ && shimGainTarget_ <= 0.0 && shimGain_ <= 0.0) {   // faded out: stop the work
+            shimOn_ = false;
+            for (auto& d : shim_.line) d.clear();
+            shimFb_[0] = shimFb_[1] = 0.0;
+        }
         const double l = bwL_.run(inL ? inL[i] : 0.0), r = bwR_.run(inR ? inR[i] : (inL ? inL[i] : 0.0));
         preL_.push(static_cast<float>(l));
         preR_.push(static_cast<float>(r));

@@ -6,12 +6,13 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 | ID | Work package | Status |
 | --- | --- | --- |
 | TW1 | Engine: figure-of-eight tank, ten programs, laws in units, hold, ensemble echo | ✅ |
-| TW2 | Plugin `tearwash.clap`: parameters, state, panel, headroom meter | ✅ |
-| TW3 | Presets: `.twpreset`, 69 factory presets (25 space), loudness trims, CLAP preset-load and discovery | ✅ |
+| TW2 | Plugin `tearwash.clap`: parameters, state, panel | ✅ |
+| TW3 | Presets: `.twpreset`, 75 factory presets (28 space, 6 with shimmer), loudness trims, CLAP preset-load and discovery | ✅ |
 | TW4 | Tests: dsp, gui, preset | ✅ |
 | TW5 | CPU profile and optimisation (SIMD for the tank taps) | ⬜ |
 | TW6 | macOS GUI glue | ⬜ |
 | TW7 | Tannhäuser integration (01 §4) | ⬜ deferred while Tannhäuser's UI is reworked on another branch |
+| TW8 | Shimmer in the engine and on the panel (02 §7, AMOUNT and INTERVAL), requested by Plumeflow | ✅ |
 
 ## Decision log
 
@@ -27,3 +28,25 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 
 - 2026-10-16 — Tearwash as its own single-engine reverb: engine, plugin, panel, 69 presets
   (loudness-matched), tests.
+- 2026-10-17 — Shimmer in the engine (TW8): a pitch-shifted feedback path with `shimmer`, `shimmerInterval`
+  and `shimmerMode` in `Controls` (02 §7), requested by Plumeflow's spec 09; bit-identical when off,
+  bounded at decay 60 s. `tearwash_dsp_test` gains the off/pitch/stability cases. The plugin panel does not expose it yet.
+- 2026-10-18 — Panel pass: decay and space in signal order with the names IN CUT, SPLIT FREQ, LOW DECAY,
+  HIGH DECAY, DAMP CUT and SIZE, PREDELAY, DIFFUSION, CLARITY, DISTANCE; the info box is replaced by a
+  description line at the bottom and each control shows its value; REAR OUT and INPUT are off the panel
+  (ids kept); MODULATION is replaced by MOD RATE and MOD DEPTH knobs (MOD DEPTH 0 = none); SHIMMER AMOUNT
+  and INTERVAL knobs (ids 18, 19). Presets that set MOD RATE keep their sound through MOD DEPTH.
+- 2026-10-18 — Six shimmer presets (three plates, three space), 75 factory presets in all; loudness
+  trims refitted. The two existing "Shimmer" names (PL Bright Shimmer Plate, SP Diamond Dust Shimmer)
+  still have shimmer off.
+- 2026-10-18 — Panel layout: tall and narrow (640 × 628), programs in two rows, larger labels and light-amber
+  values, level knobs beside motion and shimmer, headroom meter removed (it only showed the input peak).
+  A program change from the panel or the host makes the preset that program's PG preset. PL Bright Shimmer
+  Plate and SP Diamond Dust Shimmer now set shimmer.
+- 2026-10-18 — Panel look: dark rounded buttons (the selected program has a light outline), dark fader caps
+  with a light centre line, plain dark knobs with a thin pointer, a diagonal blue-grey gradient, a light
+  preset name instead of the red LED; the preset menu follows.
+- 2026-10-18 — Panel redraw cost: a redraw after a change fell from about 10.7 ms to 3.7 ms (idle frames cost
+  nothing). The idle buttons, the knob shadows and the labels are drawn once into the cached background; only
+  the selected or hovered button, the fader caps, the knob bodies and the values are redrawn, and the 2x2
+  downsample works on two channels at a time.

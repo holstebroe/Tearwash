@@ -46,6 +46,7 @@ TwValues twProgramValues(int program) {
     v[TW_DECAY] = c.decay; v[TW_LOWDECAY] = c.lowDecay; v[TW_CROSSOVER] = c.crossover; v[TW_DAMPING] = c.damping;
     v[TW_DISTANCE] = c.distance; v[TW_PREDELAY] = c.predelay; v[TW_DIFFUSION] = c.diffusion; v[TW_MODRATE] = c.modRate;
     v[TW_SIZE] = c.size; v[TW_CLARITY] = c.clarity; v[TW_HIGHCUT] = c.highCut; v[TW_MODULATION] = c.modulation ? 1.0 : 0.0;
+    v[TW_MODDEPTH] = c.modDepth; v[TW_SHIMMER] = c.shimmer; v[TW_SHIMMERINT] = law::shimmerStored(c.shimmerInterval);
     return v;
 }
 

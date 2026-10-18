@@ -31,19 +31,23 @@ Names start with a category code; the menu lists the categories in this order:
 | PG | Programs | every program with its stored settings (10), generated from the program list |
 | HL | Halls | |
 | RM | Rooms & Chambers | |
-| PL | Plates | |
-| SP | Space | long tails (8–58 s), long predelays (up to 1 s), deep modulation; the largest group (25) |
+| PL | Plates | three of them with shimmer (AMOUNT and INTERVAL set) |
+| SP | Space | long tails (8–58 s), long predelays (up to 1 s), deep modulation, three with shimmer; the largest group (28) |
 | EC | Echo & Delay | the ensemble as echo, predelay "space delays" |
 | FX | Ensemble & Effects | |
 | User | the user folder | |
 
-The factory presets (69) are defined in `tools/preset_library.py` and generated into
+The factory presets (75) are defined in `tools/preset_library.py` and generated into
 `src/tearwash/plugin/TwPresetData.cpp` by `python3 tools/gen_presets.py` (which checks
 keys, program names and ranges; never edit the generated file). Values are given in units
 (seconds, Hz, ms, ×SIZE, %) through the library's helpers. Names may evoke famous records, films
 and artists, but are invented look-alikes, never a real title, name or trademark. The library's
 decays stop at 58 s: the top of DECAY is the hold, which mutes the input, so it belongs to live
 use.
+
+**Mod depth.** A preset that sets MOD RATE also gets MOD DEPTH = (0.5 + rate) / 2 unless it sets
+MOD DEPTH itself. That is the depth the earlier single MODULATION control gave at that rate, so
+the sound of those presets did not change when MOD DEPTH was added (`gen_presets.py` applies it).
 
 **Loudness.** Every factory preset carries an output-gain trim so that its output (dry + wet at
 its Mix) matches the input level for gently pinked noise within ±1.5 dB (the PG presets are left
@@ -66,8 +70,14 @@ tools/preset_gains.json` → `python3 tools/gen_presets.py` → build. Trims spa
 - Preset bar in the header: `<` and `>` step through the whole list (also the mouse wheel over
   the name), the name shows `*` when any parameter differs from the loaded preset, SAVE saves.
 - Clicking the name opens the menu over the panel: categories on the left, the category's
-  presets in three columns (the wheel scrolls a column at a time), the current preset
+  presets in two columns (the wheel scrolls a column at a time), the current preset
   highlighted; a click loads a preset and closes the menu, a click outside closes it.
+- A program change, from the panel's buttons or from the host, makes the current preset that
+  program's PG preset (the program as stored); the modified marker then starts clear.
+- The panel is tall and narrow: the preset bar, the programs in two rows of five, the decay
+  faders, the space faders, then the motion, shimmer and level knobs. There is no meter.
+- Every fader and knob shows its current value above it. The line at the bottom says what the
+  control under the pointer does; when nothing is under the pointer it shows a hint instead.
 
 ## 5. Host integration
 

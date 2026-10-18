@@ -35,7 +35,7 @@ namespace {
 constexpr int kScale = 2;
 constexpr uint32_t kSilk = 0xF2E6E6E0;
 constexpr uint32_t kSilkDim = 0xB09A9C98;
-constexpr uint32_t kLed = 0xFFFF4A2E;          // red LED display
+constexpr uint32_t kValue = 0xFFFFD58A;        // the values above the controls: light amber, readable on the charcoal
 constexpr float kCap = 6.0f;
 
 void fill(Graphics& g, float x0, float y0, float x1, float y1, uint32_t argb) {
@@ -70,17 +70,55 @@ void label(Graphics& g, const char* text, float cx, float capTop, uint32_t ink =
     drawTextCentered(g, kLabelFont, text, cx, capTop, cap, ink);
 }
 
-void lamp(Graphics& g, float cx, float cy, float r, Color c, bool on) {
-    shadeBox(g, cx - r - 4, cy - r - 4, cx + r + 4, cy + r + 4, [&](float x, float y) {
-        const float d = std::hypot(x - cx, y - cy);
-        if (on) {
-            const float core = clamp01(r - d + 0.5f), glow = 0.35f * clamp01(1.f - (d - r) / 4.f);
-            const float a = std::max(core, glow);
-            return a > 0.f ? toArgb(mix(c, { 1.f, 1.f, 1.f }, core * 0.25f * clamp01(1.f - d / r)), a) : 0u;
-        }
-        const float a = clamp01(r - d + 0.5f);
-        return a > 0.f ? toArgb(scale(c, 0.22f), a) : 0u;
+// A dark rounded button with a light edge; selected: a bright outline.
+void button(Graphics& g, float x0, float y0, float x1, float y1, float r, bool selected, bool hot, bool shadow = true) {
+    if (shadow) softShadow(g, x0, y0, x1, y1, r, 3.f, 0.5f);
+    const Color edge = selected ? Color{ 0.88f, 0.90f, 0.92f } : Color{ 0.30f, 0.315f, 0.33f };
+    const float bw = selected ? 1.5f : 1.f;
+    roundRect(g, x0, y0, x1, y1, r, [&](float, float v, float d) {
+        Color fill = mix(Color{ 0.215f, 0.225f, 0.24f }, Color{ 0.125f, 0.13f, 0.14f }, 0.5f + 0.5f * v);
+        if (selected) fill = scale(fill, 1.1f);
+        if (hot) fill = scale(fill, 1.15f);
+        return toArgb(mix(fill, edge, smoothstep(-bw - 0.7f, -bw, d)), 1.f);
     });
+}
+
+void programLabel(Graphics& g, const TwGui::Ctl& c, bool sel) {
+    const char* text = programName(c.aux);
+    float cap = 6.4f;
+    while (cap > 3.6f && textWidth(kLabelFont, text, cap) > c.w - 8.f) cap -= 0.2f;
+    label(g, text, c.x + c.w * 0.5f, c.y + (c.h - cap) * 0.5f, sel ? 0xFFFFFFFF : kSilk, cap);
+}
+
+// What a control does, for the line at the bottom of the panel.
+const char* describe(const TwGui::Ctl& c) {
+    switch (c.kind) {
+        case TwGui::Kind::Program: return "Selects a program: the room type and its starting settings.";
+        case TwGui::Kind::PresetPrev: return "Steps back to the previous preset.";
+        case TwGui::Kind::PresetNext: return "Steps on to the next preset.";
+        case TwGui::Kind::PresetName: return "Opens the preset menu.";
+        case TwGui::Kind::PresetSave: return "Saves the current settings as a user preset.";
+        default: break;
+    }
+    switch (c.param) {
+        case TW_HIGHCUT: return "Filters the input before the reverb: lower values darken what goes in.";
+        case TW_CROSSOVER: return "The frequency that splits the tail into a low band and a high band.";
+        case TW_LOWDECAY: return "How long the low band rings, from 0.2 s to 60 s.";
+        case TW_DECAY: return "How long the high band rings; at the top the tail holds forever.";
+        case TW_DAMPING: return "A low-pass inside the loop: each pass darkens the tail. Open turns it off.";
+        case TW_SIZE: return "Scales every delay together: a bigger room at higher values.";
+        case TW_PREDELAY: return "Silence before the reverb starts, up to 1 s.";
+        case TW_DIFFUSION: return "How smeared the echoes are: higher is denser and smoother.";
+        case TW_CLARITY: return "How much the tank smears its tail: higher is clearer.";
+        case TW_DISTANCE: return "Early reflections (0 %) against the late tail (100 %): higher sounds further away.";
+        case TW_MODRATE: return "Speed of the slow drift in the delay lines.";
+        case TW_MODDEPTH: return "How far the drift moves the delays. 0 % is no modulation.";
+        case TW_SHIMMER: return "Feeds a pitch-shifted copy of the tail back in. 0 % is off.";
+        case TW_SHIMMERINT: return "Pitch of the shimmer, in semitones: -12, -7, +5, +7, +12, +19 or +24.";
+        case TW_MIX: return "Balance of dry sound and reverb: 0 % dry, 100 % reverb only.";
+        case TW_OUTGAIN: return "Level after the reverb.";
+        default: return "";
+    }
 }
 
 } // namespace
@@ -101,27 +139,33 @@ TwGui::~TwGui() {
 
 void TwGui::layout() {
     ctls_.clear();
+    // Programs in two rows of five.
     for (int i = 0; i < programCount(); ++i)
-        ctls_.push_back({ Kind::Program, -1, 20.f + i * 86.6f, 104.f, 80.f, 34.f, "", i });
+        ctls_.push_back({ Kind::Program, -1, 20.f + (i % 5) * 122.f, 60.f + (i / 5) * 38.f, 112.f, 32.f, "", i });
     // Preset bar: step, name (click: menu), save.
-    ctls_.push_back({ Kind::PresetPrev, -1, 312.f, 13.f, 20.f, 22.f, "<", 0 });
-    ctls_.push_back({ Kind::PresetName, -1, 336.f, 13.f, 190.f, 22.f, "", 0 });
-    ctls_.push_back({ Kind::PresetNext, -1, 530.f, 13.f, 20.f, 22.f, ">", 0 });
-    ctls_.push_back({ Kind::PresetSave, -1, 554.f, 13.f, 36.f, 22.f, "SAVE", 0 });
-    const struct { int p; const char* l; } faders[6] = {
-        { TW_DECAY, "DECAY" }, { TW_LOWDECAY, "LOW DECAY" }, { TW_CROSSOVER, "XOVER" }, { TW_DAMPING, "DAMPING" },
-        { TW_DISTANCE, "DISTANCE" }, { TW_PREDELAY, "PREDELAY" },
+    ctls_.push_back({ Kind::PresetPrev, -1, 352.f, 13.f, 20.f, 22.f, "<", 0 });
+    ctls_.push_back({ Kind::PresetName, -1, 376.f, 13.f, 180.f, 22.f, "", 0 });
+    ctls_.push_back({ Kind::PresetNext, -1, 560.f, 13.f, 20.f, 22.f, ">", 0 });
+    ctls_.push_back({ Kind::PresetSave, -1, 584.f, 13.f, 36.f, 22.f, "SAVE", 0 });
+    // Decay, in signal order: the input cut, the band split, the two band decays, the loop damping.
+    const struct { int p; const char* l; } decay[5] = {
+        { TW_HIGHCUT, "IN CUT" }, { TW_CROSSOVER, "SPLIT FREQ" }, { TW_LOWDECAY, "LOW DECAY" }, { TW_DECAY, "HIGH DECAY" },
+        { TW_DAMPING, "DAMP CUT" },
     };
-    for (int i = 0; i < 6; ++i) ctls_.push_back({ Kind::Fader, faders[i].p, 24.f + i * 58.f, 166.f, 40.f, 128.f, faders[i].l, 0 });
-    const struct { int p; const char* l; } knobs[5] = {
-        { TW_DIFFUSION, "DIFFUSION" }, { TW_CLARITY, "CLARITY" }, { TW_MODRATE, "MOD RATE" }, { TW_HIGHCUT, "HIGH CUT" },
-        { TW_SIZE, "SIZE" },
+    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, decay[i].p, 60.f + i * 120.f, 184.f, 40.f, 100.f, decay[i].l, 0 });
+    // Space, in signal order: the room's size, the predelay, the input diffusion, the tank's clarity, the early/late balance.
+    const struct { int p; const char* l; } space[5] = {
+        { TW_SIZE, "SIZE" }, { TW_PREDELAY, "PREDELAY" }, { TW_DIFFUSION, "DIFFUSION" }, { TW_CLARITY, "CLARITY" },
+        { TW_DISTANCE, "DISTANCE" },
     };
-    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Knob, knobs[i].p, 390.f + i * 62.f, 168.f, 46.f, 46.f, knobs[i].l, 0 });
-    const struct { int p; const char* l; } toggles[2] = { { TW_MODULATION, "MODULATION" }, { TW_REAR, "REAR OUT" } };
-    for (int i = 0; i < 2; ++i) ctls_.push_back({ Kind::Toggle, toggles[i].p, 386.f + i * 76.f, 252.f, 68.f, 22.f, toggles[i].l, 0 });
-    const struct { int p; const char* l; } levels[3] = { { TW_INGAIN, "INPUT" }, { TW_MIX, "MIX" }, { TW_OUTGAIN, "OUTPUT" } };
-    for (int i = 0; i < 3; ++i) ctls_.push_back({ Kind::Knob, levels[i].p, 722.f + i * 58.f, 168.f, 46.f, 46.f, levels[i].l, 0 });
+    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, space[i].p, 60.f + i * 120.f, 348.f, 40.f, 100.f, space[i].l, 0 });
+    // Three groups of two knobs: motion, shimmer, level.
+    const struct { int p; const char* l; } knobs[6] = {
+        { TW_MODRATE, "RATE" }, { TW_MODDEPTH, "DEPTH" }, { TW_SHIMMER, "AMOUNT" }, { TW_SHIMMERINT, "INTERVAL" },
+        { TW_MIX, "MIX" }, { TW_OUTGAIN, "OUTPUT" },
+    };
+    for (int i = 0; i < 6; ++i)
+        ctls_.push_back({ Kind::Knob, knobs[i].p, 20.f + (i / 2) * 205.f + (i % 2) * 95.f + 20.f, 520.f, 54.f, 54.f, knobs[i].l, 0 });
 }
 
 int TwGui::controlAt(int x, int y) const {
@@ -158,22 +202,10 @@ void TwGui::setNorm(int param, double n) {
     plugin_->onParamValueFromGui(static_cast<clap_id>(param), v);
 }
 
-std::string TwGui::readoutText() const {
+std::string TwGui::tooltipText() const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     const int i = active_ >= 0 ? active_ : hover_;
-    char buf[96];
-    if (i >= 0 && ctls_[static_cast<size_t>(i)].param >= 0 && enabled(ctls_[static_cast<size_t>(i)])) {
-        const int p = ctls_[static_cast<size_t>(i)].param;
-        char v[48];
-        twValueText(static_cast<uint32_t>(p), plugin_->paramValue(static_cast<clap_id>(p)), v, sizeof v);
-        std::string name = twParamInfo(static_cast<uint32_t>(p)).name;
-        std::snprintf(buf, sizeof buf, "%s  %s", name.c_str(), v);
-        std::string s = buf;
-        for (char& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        return s;
-    }
-    std::snprintf(buf, sizeof buf, "%s", programName(plugin_->program()));
-    return buf;
+    return i >= 0 ? std::string(describe(ctls_[static_cast<size_t>(i)])) : std::string();
 }
 
 // --- Drawing -------------------------------------------------------------------------------------
@@ -185,190 +217,176 @@ std::string TwGui::stateKey() const {
         std::snprintf(buf, sizeof buf, "%.6g,", plugin_->paramValue(i));
         k += buf;
     }
-    std::snprintf(buf, sizeof buf, "|%d|%d|%d|%d|%d|%d|%d|%d|", hover_, active_, plugin_->headroomLeds(), plugin_->overload() ? 1 : 0,
-                  menuOpen_ ? 1 : 0, menuCat_, menuScroll_, menuHover_);
+    std::snprintf(buf, sizeof buf, "|%d|%d|%d|%d|%d|%d|", hover_, active_, menuOpen_ ? 1 : 0, menuCat_, menuScroll_, menuHover_);
     k += buf;
     k += plugin_->presetName() + (plugin_->presetModified() ? "*" : "");
-    return k + readoutText();
+    return k;
 }
 
 void TwGui::drawStatic(Graphics& g) {
     const float W = static_cast<float>(kWidth), H = static_cast<float>(kHeight);
-    // Charcoal panel with a faint brushed grain.
+    // Blue-grey panel: a soft diagonal gradient, lighter at the top left, with a faint grain.
     shadeBox(g, 0, 0, W, H, [&](float x, float y) {
-        const float grain = 0.012f * (hash2(static_cast<int>(x * 2), static_cast<int>(y * 0.5f), 7) - 0.5f);
-        const float v = 0.135f - 0.03f * (y / H) + grain;
-        return toArgb({ v, v * 1.01f, v * 1.04f }, 1.f);
+        const float grain = 0.008f * (hash2(static_cast<int>(x * 2), static_cast<int>(y * 0.5f), 7) - 0.5f);
+        const float t = clamp01(0.45f * x / W + 0.8f * y / H);
+        const Color c = mix(Color{ 0.205f, 0.225f, 0.245f }, Color{ 0.07f, 0.077f, 0.086f }, t);
+        return toArgb({ c.r + grain, c.g + grain, c.b + grain }, 1.f);
     });
     fill(g, 0, 0, W, 2, 0xFF2C2D30);
     fill(g, 0, H - 2, W, H, 0xFF08090A);
-    drawText(g, kDisplayFont, "TEARWASH", 20.f, 14.f, 16.f, 0xFFF0EEE6);
-    drawText(g, kLabelFont, "ALGORITHMIC REVERB", 170.f, 19.f, 6.f, kSilkDim);
-    // LED display window.
-    roundRect(g, 20, 48, 880, 88, 3.f, [](float, float v, float d) {
-        Color c{ 0.05f, 0.012f, 0.01f };
-        c = scale(c, 1.f + 0.5f * v);
-        return toArgb(mix(c, { 0.30f, 0.30f, 0.31f }, smoothstep(-1.5f, 0.f, d)), 1.f);
-    });
-    // Section prints.
-    drawText(g, kLabelFont, "PROGRAM", 20.f, 90.f, 5.f, kSilkDim);
-    drawLineAA(g, 20, 156, 362, 156, 0.8f, kSilkDim);
-    label(g, "DECAY", 191.f, 150.f, kSilkDim, 5.f);
-    drawLineAA(g, 384, 156, 696, 156, 0.8f, kSilkDim);
-    label(g, "SPACE  /  MOTION", 540.f, 150.f, kSilkDim, 5.f);
-    drawLineAA(g, 718, 156, 880, 156, 0.8f, kSilkDim);
-    label(g, "LEVEL", 799.f, 150.f, kSilkDim, 5.f);
+    drawText(g, kDisplayFont, "TEARWASH", 20.f, 11.f, 20.f, 0xFFF0EEE6);
+    drawText(g, kLabelFont, "ALGORITHMIC REVERB", 200.f, 19.f, 6.f, kSilkDim);
+    // Programs, then decay and space faders, then three groups of knobs.
+    drawText(g, kLabelFont, "PROGRAM", 20.f, 47.f, 5.5f, kSilkDim);
+    label(g, "DECAY", 320.f, 148.f, kSilkDim, 6.f);
+    drawLineAA(g, 20, 157, 620, 157, 0.8f, kSilkDim);
+    label(g, "SPACE", 320.f, 314.f, kSilkDim, 6.f);
+    drawLineAA(g, 20, 323, 620, 323, 0.8f, kSilkDim);
+    static const char* kGroups[3] = { "MOTION", "SHIMMER", "LEVEL" };
+    for (int i = 0; i < 3; ++i) {
+        label(g, kGroups[i], 20.f + i * 205.f + 95.f, 480.f, kSilkDim, 6.f);
+        drawLineAA(g, 20.f + i * 205.f, 489.f, 210.f + i * 205.f, 489.f, 0.8f, kSilkDim);
+    }
+    drawLineAA(g, 20, 598, 620, 598, 0.8f, kSilkDim);
     // Fader slots and scales.
     for (const Ctl& c : ctls_) {
-        if (c.kind == Kind::Fader) {
-            const float cx = c.x + c.w * 0.5f, y0 = c.y + 8.f, y1 = c.y + c.h - 8.f;
-            roundRect(g, cx - 2.5f, y0 - 2, cx + 2.5f, y1 + 2, 2.5f, [](float, float v, float d) {
-                return toArgb(mix({ 0.01f, 0.01f, 0.012f }, { 0.32f, 0.33f, 0.34f }, smoothstep(-1.f, 0.f, d) * (v > 0 ? 0.9f : 0.3f)), 1.f);
-            });
-            for (int i = 0; i <= 10; ++i) {
-                const float y = y0 + (y1 - y0) * i / 10.f, len = (i % 5 == 0) ? 5.f : 3.f;
-                drawLineAA(g, c.x + 2.f, y, c.x + 2.f + len, y, 0.8f, kSilkDim);
-                drawLineAA(g, c.x + c.w - 2.f - len, y, c.x + c.w - 2.f, y, 0.8f, kSilkDim);
-            }
-        } else if (c.kind == Kind::Knob) {
-            const float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f, r = c.w * 0.5f - 5.f;
-            for (int i = 0; i <= 10; ++i) {
-                const float a = (120.f + 30.f * i) * kPi / 180.f, len = (i % 5 == 0) ? 3.5f : 2.f;
-                drawLineAA(g, cx + std::cos(a) * (r + 2.f), cy + std::sin(a) * (r + 2.f), cx + std::cos(a) * (r + 2.f + len),
-                           cy + std::sin(a) * (r + 2.f + len), 0.9f, kSilkDim);
-            }
+        if (c.kind != Kind::Fader) continue;
+        const float cx = c.x + c.w * 0.5f, y0 = c.y + 8.f, y1 = c.y + c.h - 8.f;
+        roundRect(g, cx - 2.f, y0 - 2, cx + 2.f, y1 + 2, 2.f, [](float, float v, float d) {
+            return toArgb(mix({ 0.015f, 0.017f, 0.02f }, { 0.28f, 0.30f, 0.32f }, smoothstep(-1.f, 0.f, d) * (v > 0 ? 0.8f : 0.3f)), 1.f);
+        });
+        for (int i = 0; i <= 10; ++i) {
+            const float y = y0 + (y1 - y0) * i / 10.f, len = (i % 5 == 0) ? 5.f : 3.f;
+            drawLineAA(g, c.x + 2.f, y, c.x + 2.f + len, y, 0.8f, 0x70A8B0B4);
+            drawLineAA(g, c.x + c.w - 2.f - len, y, c.x + c.w - 2.f, y, 0.8f, 0x70A8B0B4);
         }
     }
-    // Headroom meter prints.
-    static const char* kMeter[6] = { "-24", "-18", "-12", "-6", "0", "OVL" };
-    for (int i = 0; i < 6; ++i) label(g, kMeter[i], 735.f + i * 27.f, 272.f, kSilkDim, 4.6f);
-    label(g, "HEADROOM", 802.f, 244.f, kSilkDim, 4.6f);
+    // What does not change with a value or a selection, so that a redraw need not repeat it: the knobs'
+    // shadows, the labels, and the idle buttons (the selected or hovered one is drawn over its idle self).
+    for (const Ctl& c : ctls_) {
+        switch (c.kind) {
+            case Kind::Fader: label(g, c.label, c.x + c.w * 0.5f, c.y + c.h + 4.f, kSilk, 7.2f); break;
+            case Kind::Knob: {
+                const float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f, R = c.w * 0.5f - 7.f;
+                softShadow(g, cx - R, cy - R, cx + R, cy + R, R, 3.f, 0.6f);
+                label(g, c.label, cx, c.y + c.h + 3.f, kSilk, 7.2f);
+                break;
+            }
+            case Kind::Program:
+                if (c.aux >= programCount()) break;
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 5.f, false, false);
+                programLabel(g, c, false);
+                break;
+            case Kind::PresetPrev:
+            case Kind::PresetNext:
+            case Kind::PresetSave:
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, false, false);
+                label(g, c.label, c.x + c.w * 0.5f, c.y + (c.h - 5.f) * 0.5f, kSilk, 5.f);
+                break;
+            default: break;
+        }
+    }
 }
 
 void TwGui::drawControls(Graphics& g) {
     const int pg = plugin_->program();
+    // The current value, in the display font, above a fader or knob.
+    auto valueAbove = [&](const Ctl& c) {
+        char buf[48];
+        twValueText(static_cast<uint32_t>(c.param), plugin_->paramValue(static_cast<clap_id>(c.param)), buf, sizeof buf);
+        drawTextCentered(g, kDisplayFont, buf, c.x + c.w * 0.5f, c.y - 16.f, 8.f, kValue);
+    };
     for (size_t i = 0; i < ctls_.size(); ++i) {
         const Ctl& c = ctls_[i];
-        const bool en = enabled(c);
         const bool hot = static_cast<int>(i) == hover_ || static_cast<int>(i) == active_;
         switch (c.kind) {
             case Kind::Program: {
-                if (c.aux >= programCount()) break;
                 const bool sel = c.aux == pg;
-                softShadow(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.f, 2.5f, 0.45f);
-                roundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.5f, [&](float, float v, float d) {
-                    Color col = sel ? Color{ 0.80f, 0.80f, 0.78f } : (en ? Color{ 0.25f, 0.255f, 0.265f } : Color{ 0.16f, 0.165f, 0.17f });
-                    col = scale(col, 1.06f - 0.16f * v);
-                    if (hot) col = scale(col, 1.12f);
-                    return toArgb(mix(col, scale(col, v < 0 ? 1.35f : 0.6f), smoothstep(-1.3f, 0.f, d) * 0.5f), 1.f);
-                });
-                const char* text = programName(c.aux);
-                float cap = 5.4f;
-                while (cap > 3.6f && textWidth(kLabelFont, text, cap) > c.w - 8.f) cap -= 0.2f;
-                label(g, text, c.x + c.w * 0.5f, c.y + (c.h - cap) * 0.5f, sel ? 0xF0151515 : (en ? kSilk : 0x60A0A0A0), cap);
+                if (c.aux >= programCount() || !(sel || hot)) break;
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 5.f, sel, hot, false);
+                programLabel(g, c, sel);
                 break;
             }
             case Kind::Fader: {
+                // A dark cap with a light centre line.
                 const float cx = c.x + c.w * 0.5f, y0 = c.y + 8.f, y1 = c.y + c.h - 8.f;
                 const float y = y1 - static_cast<float>(norm(c.param)) * (y1 - y0);
-                const float hw = 13.f, hh = 7.f;
-                softShadow(g, cx - hw, y - hh, cx + hw, y + hh, 2.f, 3.f, 0.55f);
-                const Color capC = en ? Color{ 0.86f, 0.86f, 0.84f } : Color{ 0.36f, 0.36f, 0.36f };
-                roundRect(g, cx - hw, y - hh, cx + hw, y + hh, 2.f, [&](float, float v, float d) {
-                    Color col = scale(capC, 1.06f - 0.22f * v);
-                    const float ridge = 0.5f + 0.5f * std::cos(v * 3.f * kPi);
-                    col = scale(col, 0.94f + 0.06f * ridge);
-                    if (hot && en) col = scale(col, 1.06f);
-                    return toArgb(mix(col, scale(col, v < 0 ? 1.3f : 0.6f), smoothstep(-1.4f, 0.f, d) * 0.6f), 1.f);
+                const float hw = 14.f, hh = 7.5f;
+                softShadow(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, 3.f, 0.6f);
+                roundRect(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, [&](float u, float v, float d) {
+                    Color col = mix(Color{ 0.33f, 0.345f, 0.36f }, Color{ 0.15f, 0.16f, 0.17f }, 0.5f + 0.5f * v);
+                    if (hot) col = scale(col, 1.18f);
+                    // The edge is lit along the top and left, away from the shadow.
+                    const float lit = clamp01(0.5f - 0.5f * v + 0.35f * (u < -0.6f ? 1.f : 0.f));
+                    const Color edge = mix(Color{ 0.28f, 0.295f, 0.31f }, Color{ 0.66f, 0.68f, 0.70f }, lit);
+                    return toArgb(mix(col, edge, smoothstep(-1.5f, -0.7f, d) * 0.8f), 1.f);
                 });
-                drawLineAA(g, cx - hw + 2.f, y, cx + hw - 2.f, y, 1.2f, 0xFF141414);
-                const char* name = c.label;
-                label(g, name, cx, c.y + c.h + 4.f, en ? kSilk : 0x60A0A0A0);
+                drawLineAA(g, cx - hw + 3.f, y, cx + hw - 3.f, y, 1.6f, 0xFFE8ECEE);
+                valueAbove(c);
                 break;
             }
             case Kind::Knob: {
+                // A dark disc, lit from the top left, with a thin light pointer.
                 const float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f, R = c.w * 0.5f - 7.f;
                 const float a = (120.f + 300.f * static_cast<float>(norm(c.param))) * kPi / 180.f;
                 const float px = std::cos(a), py = std::sin(a), s = static_cast<float>(g.getScale());
-                softShadow(g, cx - R, cy - R, cx + R, cy + R, R, 3.f, 0.55f);
-                const Material body{ en ? Color{ 0.16f, 0.16f, 0.17f } : Color{ 0.10f, 0.10f, 0.105f }, 0.5f, 0.6f, 0.45f, 20.f };
                 shadeBox(g, cx - R - 1, cy - R - 1, cx + R + 1, cy + R + 1, [&](float x, float y) {
                     const float dx = x - cx, dy = y - cy, d = std::sqrt(dx * dx + dy * dy);
                     const float cov = clamp01((R - d) * s + 0.5f);
                     if (cov <= 0.f) return 0u;
-                    const float ux = d > 1e-4f ? dx / d : 0.f, uy = d > 1e-4f ? dy / d : 0.f;
-                    Color col = shadeLit(body, tiltedNormal(ux, uy, d > 0.8f * R ? 0.9f : 0.15f * d / R));
-                    if (hot && en) col = scale(col, 1.15f);
+                    // A subtle gradient, and a faint highlight on the rim at the top left (the shadow falls bottom right).
+                    const float lit = std::hypot(dx + 0.3f * R, dy + 0.35f * R) / (1.5f * R);
+                    Color col = mix(Color{ 0.165f, 0.175f, 0.19f }, Color{ 0.11f, 0.117f, 0.128f }, smoothstep(0.f, 1.f, lit));
+                    if (hot) col = scale(col, 1.2f);
+                    const float rim = smoothstep(R - 1.6f, R - 0.5f, d);
+                    const float facing = d > 1e-4f ? clamp01(-0.707f * (dx + dy) / d) : 0.f;
+                    col = mix(col, Color{ 0.56f, 0.58f, 0.60f }, rim * (0.12f + 0.55f * facing * facing));
                     const float along = dx * px + dy * py, perp = std::fabs(-dx * py + dy * px);
-                    if (along > 0.3f * R && along < R - 1.5f && perp < 1.1f) col = en ? Color{ 0.96f, 0.95f, 0.92f } : Color{ 0.4f, 0.4f, 0.4f };
+                    if (along > 0.3f * R && along < R - 2.f && perp < 0.9f) col = Color{ 0.93f, 0.95f, 0.96f };
                     return toArgb(col, cov);
                 });
-                label(g, c.label, cx, c.y + c.h + 3.f, en ? kSilk : 0x60A0A0A0);
+                valueAbove(c);
                 break;
             }
             case Kind::PresetPrev:
             case Kind::PresetNext:
             case Kind::PresetSave: {
-                softShadow(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.f, 2.5f, 0.45f);
-                roundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.5f, [&](float, float v, float d) {
-                    Color col = scale(Color{ 0.25f, 0.255f, 0.265f }, 1.06f - 0.16f * v);
-                    if (hot) col = scale(col, 1.15f);
-                    return toArgb(mix(col, scale(col, v < 0 ? 1.35f : 0.6f), smoothstep(-1.3f, 0.f, d) * 0.5f), 1.f);
-                });
+                if (!hot) break;
+                button(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, false, true, false);
                 label(g, c.label, c.x + c.w * 0.5f, c.y + (c.h - 5.f) * 0.5f, kSilk, 5.f);
                 break;
             }
             case Kind::PresetName: {
-                roundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.5f, [&](float, float v, float d) {
-                    Color col{ 0.05f, 0.012f, 0.01f };
-                    col = scale(col, (hot ? 1.6f : 1.f) + 0.5f * v);
-                    return toArgb(mix(col, { 0.30f, 0.30f, 0.31f }, smoothstep(-1.5f, 0.f, d)), 1.f);
+                roundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, [&](float, float v, float d) {
+                    Color col = mix(Color{ 0.045f, 0.05f, 0.055f }, Color{ 0.085f, 0.09f, 0.10f }, 0.5f + 0.5f * v);
+                    if (hot) col = scale(col, 1.4f);
+                    return toArgb(mix(col, Color{ 0.30f, 0.315f, 0.33f }, smoothstep(-1.5f, -0.5f, d)), 1.f);
                 });
                 std::string name = plugin_->presetName();
                 if (plugin_->presetModified()) name += " *";
-                float cap = 7.f;
-                while (cap > 4.5f && textWidth(kDisplayFont, name.c_str(), cap) > c.w - 10.f) cap -= 0.25f;
-                drawText(g, kDisplayFont, name.c_str(), c.x + 6.f, c.y + (c.h - cap) * 0.5f, cap, kLed);
-                break;
-            }
-            case Kind::Toggle: {
-                const bool on = plugin_->paramValue(static_cast<clap_id>(c.param)) >= 0.5;
-                softShadow(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.f, 2.5f, 0.45f);
-                roundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.5f, [&](float, float v, float d) {
-                    Color col = en ? Color{ 0.25f, 0.255f, 0.265f } : Color{ 0.15f, 0.15f, 0.155f };
-                    col = scale(col, (on ? 0.85f : 1.06f) - 0.16f * v);
-                    if (hot && en) col = scale(col, 1.15f);
-                    return toArgb(mix(col, scale(col, v < 0 ? 1.35f : 0.6f), smoothstep(-1.3f, 0.f, d) * 0.5f), 1.f);
-                });
-                label(g, c.label, c.x + c.w * 0.5f + 4.f, c.y + (c.h - 4.8f) * 0.5f, en ? kSilk : 0x60A0A0A0, 4.8f);
-                lamp(g, c.x + 6.f, c.y + c.h * 0.5f, 2.f, { 1.f, 0.25f, 0.12f }, on && en);
+                float cap = 8.f;
+                while (cap > 4.5f && textWidth(kDisplayFont, name.c_str(), cap) > c.w - 14.f) cap -= 0.25f;
+                drawText(g, kDisplayFont, name.c_str(), c.x + 8.f, c.y + (c.h - cap) * 0.5f, cap, 0xFFF0F2F3);
                 break;
             }
         }
     }
-    // Display: the program on the left, the readout on the right.
-    drawText(g, kDisplayFont, programName(pg), 32.f, 61.f, 13.f, kLed);
-    const std::string r = (hover_ >= 0 || active_ >= 0) ? readoutText() : std::string();
-    if (!r.empty()) {
-        float cap = 11.f;
-        while (cap > 6.f && textWidth(kDisplayFont, r.c_str(), cap) > 430.f) cap -= 0.5f;
-        drawText(g, kDisplayFont, r.c_str(), 868.f - textWidth(kDisplayFont, r.c_str(), cap), 68.f - cap * 0.5f, cap, kLed);
-    }
-    // Headroom LEDs.
-    const int leds = plugin_->headroomLeds();
-    for (int i = 0; i < 5; ++i)
-        lamp(g, 735.f + i * 27.f, 262.f, 3.f, i < 3 ? Color{ 0.25f, 0.95f, 0.35f } : Color{ 1.f, 0.8f, 0.15f }, i < leds);
-    lamp(g, 735.f + 5 * 27.f, 262.f, 3.f, { 1.f, 0.2f, 0.1f }, plugin_->overload());
+    // The description of the control under the pointer, on the line at the bottom.
+    const std::string tip = tooltipText();
+    const char* text = tip.empty() ? "Hover over a control to see what it does." : tip.c_str();
+    float cap = 7.f;
+    while (cap > 4.6f && textWidth(kLabelFont, text, cap) > 600.f) cap -= 0.2f;
+    drawText(g, kLabelFont, text, 20.f, 606.f, cap, tip.empty() ? kSilkDim : kSilk);
     if (menuOpen_) drawMenu(g);
 }
 
 // --- Preset menu ---------------------------------------------------------------------------------
 
 namespace {
-constexpr float kMenuX0 = 20.f, kMenuY0 = 42.f, kMenuX1 = 880.f, kMenuY1 = 314.f;
-constexpr float kCatX = 30.f, kCatY = 54.f, kCatH = 22.f, kCatW = 160.f;
-constexpr float kItemX = 204.f, kItemY = 54.f, kItemH = 16.f, kItemW = 224.f;
-constexpr int kItemRows = 15, kItemCols = 3, kItemPage = kItemRows * kItemCols;
+constexpr float kMenuX0 = 20.f, kMenuY0 = 42.f, kMenuX1 = 620.f, kMenuY1 = 314.f;
+constexpr float kCatX = 30.f, kCatY = 54.f, kCatH = 22.f, kCatW = 130.f;
+constexpr float kItemX = 176.f, kItemY = 54.f, kItemH = 16.f, kItemW = 220.f;
+constexpr int kItemRows = 15, kItemCols = 2, kItemPage = kItemRows * kItemCols;
 }
 
 void TwGui::openMenu() {
@@ -411,36 +429,36 @@ int TwGui::menuHit(int x, int y) const {
 void TwGui::drawMenu(Graphics& g) {
     softShadow(g, kMenuX0, kMenuY0, kMenuX1, kMenuY1, 3.f, 6.f, 0.7f);
     roundRect(g, kMenuX0, kMenuY0, kMenuX1, kMenuY1, 3.f, [](float, float v, float d) {
-        const Color c = scale(Color{ 0.06f, 0.02f, 0.016f }, 1.f + 0.3f * v);
-        return toArgb(mix(c, { 0.32f, 0.30f, 0.30f }, smoothstep(-1.5f, 0.f, d)), 0.97f);
+        const Color c = scale(Color{ 0.06f, 0.068f, 0.078f }, 1.f + 0.3f * v);
+        return toArgb(mix(c, { 0.30f, 0.315f, 0.33f }, smoothstep(-1.5f, 0.f, d)), 0.98f);
     });
     const auto& ps = plugin_->presetLibrary().presets();
     for (size_t i = 0; i < menuCats_.size(); ++i) {
         const float cy = kCatY + i * kCatH;
         const bool sel = static_cast<int>(i) == menuCat_, hot = menuHover_ == -2 - static_cast<int>(i);
-        if (sel || hot) fill(g, kCatX - 4.f, cy - 1.f, kCatX + kCatW, cy + kCatH - 3.f, sel ? 0x80602010 : 0x40602010);
+        if (sel || hot) fill(g, kCatX - 4.f, cy - 1.f, kCatX + kCatW, cy + kCatH - 3.f, sel ? 0x70A8B8C8 : 0x38A8B8C8);
         const std::string n = TwPresetLibrary::categoryName(menuCats_[i]);
-        drawText(g, kDisplayFont, n.c_str(), kCatX, cy + 4.f, 8.f, sel ? kLed : 0xC0E05030);
+        drawText(g, kDisplayFont, n.c_str(), kCatX, cy + 4.f, 8.f, sel ? 0xFFFFFFFF : 0xFFC0C8CE);
     }
-    drawLineAA(g, kItemX - 10.f, kCatY, kItemX - 10.f, kMenuY1 - 12.f, 0.8f, 0x80803020);
+    drawLineAA(g, kItemX - 10.f, kCatY, kItemX - 10.f, kMenuY1 - 12.f, 0.8f, 0x80708090);
     const int cur = plugin_->presetIndex();
     for (int k = 0; k < kItemPage; ++k) {
         const int idx = menuScroll_ + k;
         if (idx >= static_cast<int>(menuItems_.size())) break;
         const int pi = menuItems_[static_cast<size_t>(idx)];
         const float x = kItemX + (k / kItemRows) * kItemW, y = kItemY + (k % kItemRows) * kItemH;
-        if (pi == cur || pi == menuHover_) fill(g, x - 3.f, y - 1.f, x + kItemW - 8.f, y + kItemH - 2.f, pi == cur ? 0x80602010 : 0x40602010);
+        if (pi == cur || pi == menuHover_) fill(g, x - 3.f, y - 1.f, x + kItemW - 8.f, y + kItemH - 2.f, pi == cur ? 0x70A8B8C8 : 0x38A8B8C8);
         std::string n = ps[static_cast<size_t>(pi)].name;
         if (n.size() > 3 && n[2] == ' ') n = n.substr(3);   // the category is the column on the left
-        float cap = 6.f;
+        float cap = 7.f;
         while (cap > 4.f && textWidth(kDisplayFont, n.c_str(), cap) > kItemW - 14.f) cap -= 0.25f;
-        drawText(g, kDisplayFont, n.c_str(), x, y + (kItemH - cap) * 0.5f - 1.f, cap, pi == cur ? kLed : 0xD0E06040);
+        drawText(g, kDisplayFont, n.c_str(), x, y + (kItemH - cap) * 0.5f - 1.f, cap, pi == cur ? 0xFFFFFFFF : 0xFFD0D6DA);
     }
     if (static_cast<int>(menuItems_.size()) > kItemPage) {
         char more[48];
         std::snprintf(more, sizeof more, "%d-%d OF %d   WHEEL: MORE", menuScroll_ + 1,
                       std::min(static_cast<int>(menuItems_.size()), menuScroll_ + kItemPage), static_cast<int>(menuItems_.size()));
-        drawText(g, kLabelFont, more, kItemX, kMenuY1 - 14.f, 4.8f, 0xC0E05030);
+        drawText(g, kLabelFont, more, kItemX, kMenuY1 - 14.f, 4.8f, 0xFFA8B0B4);
     }
 }
 
@@ -512,16 +530,17 @@ void TwGui::renderFrame() {
     compose_ = static_;
     Graphics g(compose_.data(), kWidth, kHeight, kScale);
     drawControls(g);
-    // 2×2 box filter.
+    // 2×2 box filter, two channels at a time (red and blue, then green and alpha, in 16-bit lanes).
+    constexpr uint32_t kLanes = 0x00FF00FFu;
     for (uint32_t y = 0; y < kHeight; ++y) {
+        const uint32_t* top = &compose_[static_cast<size_t>(y) * 2 * BW];
+        const uint32_t* bottom = top + BW;
+        uint32_t* out = &pixels_[static_cast<size_t>(y) * kWidth];
         for (uint32_t x = 0; x < kWidth; ++x) {
-            uint32_t r = 0, gg = 0, b = 0;
-            for (int dy = 0; dy < 2; ++dy)
-                for (int dx = 0; dx < 2; ++dx) {
-                    const uint32_t p = compose_[static_cast<size_t>(y * 2 + dy) * BW + x * 2 + dx];
-                    r += (p >> 16) & 0xFF; gg += (p >> 8) & 0xFF; b += p & 0xFF;
-                }
-            pixels_[static_cast<size_t>(y) * kWidth + x] = 0xFF000000u | ((r / 4) << 16) | ((gg / 4) << 8) | (b / 4);
+            const uint32_t a = top[2 * x], b = top[2 * x + 1], c = bottom[2 * x], d = bottom[2 * x + 1];
+            const uint32_t rb = (a & kLanes) + (b & kLanes) + (c & kLanes) + (d & kLanes);
+            const uint32_t ga = ((a >> 8) & kLanes) + ((b >> 8) & kLanes) + ((c >> 8) & kLanes) + ((d >> 8) & kLanes);
+            out[x] = 0xFF000000u | ((rb >> 2) & kLanes) | (((ga >> 2) & kLanes) << 8);
         }
     }
 #if defined(__linux__) && !defined(__APPLE__)
@@ -552,11 +571,6 @@ void TwGui::handleMouseDown(int x, int y, bool shift) {
         case Kind::PresetName: openMenu(); break;
         case Kind::PresetSave: startSave(); break;
         case Kind::Program: plugin_->selectProgram(c.aux); break;
-        case Kind::Toggle:
-            plugin_->onBeginEditFromGui(static_cast<clap_id>(c.param));
-            plugin_->onParamValueFromGui(static_cast<clap_id>(c.param), plugin_->paramValue(static_cast<clap_id>(c.param)) >= 0.5 ? 0.0 : 1.0);
-            plugin_->onEndEditFromGui(static_cast<clap_id>(c.param));
-            break;
         case Kind::Fader:
         case Kind::Knob: {
             active_ = i;

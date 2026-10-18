@@ -147,6 +147,8 @@ int main(int argc, char** argv) {
         CHECK(p.program() == 9, "host program change");
         CHECK(p.paramValue(TW_DECAY) == Reverb::programDefaults(9).decay, "VAST SPACE settings after host change (%.3f, plate %.3f)",
               p.paramValue(TW_DECAY), plateDecay);
+        CHECK(p.presetName() == "PG VAST SPACE" && !p.presetModified(), "the preset follows a host program change ('%s')",
+              p.presetName().c_str());
     }
     // A control change through the host keeps the program.
     {
@@ -187,8 +189,7 @@ int main(int argc, char** argv) {
         gui.handleMouseUp();
         CHECK(p.paramValue(TW_DECAY) > before, "fader drag raises DECAY (%.3f → %.3f)", before, p.paramValue(TW_DECAY));
         gui.handleMouseMove(static_cast<int>(c.x + c.w / 2), capY);
-        CHECK(gui.readoutText().find("DECAY") == 0 && gui.readoutText().find(" S") != std::string::npos, "readout '%s'",
-              gui.readoutText().c_str());
+        CHECK(gui.tooltipText().find("high band") != std::string::npos, "tooltip '%s'", gui.tooltipText().c_str());
     }
     // Wheel: 0.5 % per notch.
     {
@@ -198,16 +199,21 @@ int main(int argc, char** argv) {
         gui.handleWheel(x, y, 1);
         CHECK(std::fabs(p.paramValue(TW_PREDELAY) - std::min(1.0, before + 0.005)) < 1e-9, "wheel steps 0.5 %%");
         gui.handleMouseMove(x, y);
-        CHECK(gui.readoutText().find(" MS") != std::string::npos, "predelay readout in ms: '%s'", gui.readoutText().c_str());
+        CHECK(gui.tooltipText().find("Silence") == 0, "predelay description '%s'", gui.tooltipText().c_str());
+        char shown[48];
+        twValueText(TW_PREDELAY, p.paramValue(TW_PREDELAY), shown, sizeof shown);
+        CHECK(std::string(shown).find(" ms") != std::string::npos, "predelay value in ms: '%s'", shown);
     }
-    // Toggle.
+    // Mod depth knob: drag up raises the depth.
     {
-        const int t = gui.findControl(TwGui::Kind::Toggle, TW_REAR);
-        centre(t, x, y);
-        const double before = p.paramValue(TW_REAR);
+        const int k = gui.findControl(TwGui::Kind::Knob, TW_MODDEPTH);
+        CHECK(k >= 0, "mod depth knob");
+        centre(k, x, y);
+        const double before = p.paramValue(TW_MODDEPTH);
         gui.handleMouseDown(x, y, false);
+        gui.handleMouseDrag(x, y - 30, false);
         gui.handleMouseUp();
-        CHECK(p.paramValue(TW_REAR) != before, "rear toggle");
+        CHECK(p.paramValue(TW_MODDEPTH) > before, "mod depth knob drag (%.3f → %.3f)", before, p.paramValue(TW_MODDEPTH));
     }
     // Program buttons.
     {
@@ -215,6 +221,8 @@ int main(int argc, char** argv) {
         gui.handleMouseDown(x, y, false);
         gui.handleMouseUp();
         CHECK(p.program() == 4, "program button selects CHAMBER (%d)", p.program());
+        CHECK(p.presetName() == "PG CHAMBER" && !p.presetModified(), "the preset follows the program button ('%s')",
+              p.presetName().c_str());
         g_out.clear();
         std::vector<float> l(256, 0.f), r(256, 0.f), ol, orr;
         run(p, l, r, ol, orr);

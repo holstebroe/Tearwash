@@ -13,10 +13,14 @@
 // diffusion allpasses and a delay into the other half. Outputs A–D take decorrelated taps from
 // both halves; DISTANCE moves the balance from the early (input-diffuser) taps to the tank.
 // ENSEMBLE: eight voices on gliding delays with a little diffusion; DECAY sets the echo feedback.
+// SHIMMER (tank programs only): a two-tap crossfaded pitch shifter reads the tank output, is band-limited
+// and soft-limited, and is fed back into the tank input.
 // Real-time safe: setSampleRate() allocates, process() and setControls() do not.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 namespace tearwash {
@@ -26,10 +30,18 @@ struct Controls {
     double lowDecay = 0.5, decay = 0.5, crossover = 0.4, damping = 0.7, distance = 0.4, predelay = 0.0;
     double diffusion = 0.6, modRate = 0.3, size = 0.5, clarity = 0.2, highCut = 0.9;
     bool modulation = true;
+    double modDepth = 0.5;          // 0 = no modulation; 1 = twice the program's excursion (docs/02_ENGINE.md §4)
+    // Shimmer (docs/02_ENGINE.md §7): a pitch-shifted copy of the tank output fed back into the tank
+    // input. Off unless shimmerMode is set; shimmer is the amount 0…1, shimmerInterval the shift in
+    // semitones (-24…+24; the usual set is -12, -7, +5, +7, +12, +19, +24).
+    double shimmer = 0.0;
+    int shimmerInterval = 12;
+    bool shimmerMode = false;
     bool operator==(const Controls& o) const {
         return lowDecay == o.lowDecay && decay == o.decay && crossover == o.crossover && damping == o.damping
                && distance == o.distance && predelay == o.predelay && diffusion == o.diffusion && modRate == o.modRate
-               && size == o.size && clarity == o.clarity && highCut == o.highCut && modulation == o.modulation;
+               && size == o.size && clarity == o.clarity && highCut == o.highCut && modulation == o.modulation
+               && modDepth == o.modDepth && shimmer == o.shimmer && shimmerInterval == o.shimmerInterval && shimmerMode == o.shimmerMode;
     }
     bool operator!=(const Controls& o) const { return !(*this == o); }
 };
@@ -44,6 +56,20 @@ inline double highCutHz(double v) { return 1000.0 * std::pow(20.0, v); }        
 inline double predelayMs(double v) { return 1000.0 * v * v; }                    // 0 … 1000 ms
 inline double sizeScale(double v) { return 0.5 * std::pow(4.0, v); }             // ×0.5 … ×2
 inline double modRateHz(double v) { return 0.1 * std::pow(50.0, v); }            // 0.1 … 5 Hz
+inline double shimmerRatio(int semitones) { return std::pow(2.0, semitones / 12.0); }   // frequency ratio
+// The shimmer interval is a choice of the usual set; the stored 0…1 value picks the step (its
+// index over six: 0, 1/6, … 1).
+constexpr int kShimmerSteps[7] = { -12, -7, 5, 7, 12, 19, 24 };
+inline int shimmerSemitones(double v) {
+    const int i = static_cast<int>(std::lround(std::max(0.0, std::min(1.0, v)) * 6.0));
+    return kShimmerSteps[i];
+}
+inline double shimmerStored(int semitones) {   // the stored value of the nearest step
+    int best = 0;
+    for (int i = 1; i < 7; ++i)
+        if (std::abs(kShimmerSteps[i] - semitones) < std::abs(kShimmerSteps[best] - semitones)) best = i;
+    return best / 6.0;
+}
 } // namespace law
 
 class Reverb {
@@ -91,6 +117,13 @@ private:
         double gLow = 0, gMid = 0;
     };
 
+    // Dual-tap (smoothstep-crossfaded) delay-line pitch shifter for the shimmer path, one line per channel.
+    struct Shifter {
+        Delay line[2];
+        OnePole hp[2], lp1[2], lp2[2];
+        double phase = 0.0, window = 1.0;
+    };
+
     void configure();             // targets from program + controls
     void runTank(double inL, double inR, double& a, double& b, double& c, double& d);
     void runEnsemble(double inL, double inR, double& a, double& b, double& c, double& d);
@@ -113,6 +146,11 @@ private:
     double slew_ = 0.0;           // per-sample length glide coefficient
     bool hold_ = false;
     double inGain_ = 1.0, inGainTarget_ = 1.0;
+    // Shimmer.
+    Shifter shim_;
+    double shimRate_ = 0.0;                  // tap phase increment per sample, (1 - ratio) / window
+    double shimGain_ = 0.0, shimGainTarget_ = 0.0, shimFb_[2] = {};
+    bool shimOn_ = false;                    // path running (amount > 0, or still fading out)
     // Ensemble voices.
     Delay voice_[2];
     Wander vWander_[8];

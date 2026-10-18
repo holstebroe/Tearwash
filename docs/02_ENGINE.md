@@ -77,14 +77,15 @@ Control value v = 0…1 as the plugin stores it.
 
 | Control | Law |
 | --- | --- |
-| DECAY, LOW DECAY | 0.2·300^v s (0.2–60 s); DECAY at v ≥ 0.997: hold (infinite decay, input muted over 50 ms, damping off) |
-| CROSSOVER | 80·125^v Hz (80 Hz–10 kHz) |
-| DAMPING | tank corner 1000·20^v Hz, open at v ≥ 0.995 |
-| HIGH CUT | input corner 1000·20^v Hz, open at v ≥ 0.995 |
+| DECAY (panel: HIGH DECAY), LOW DECAY | 0.2·300^v s (0.2–60 s); DECAY at v ≥ 0.997: hold (infinite decay, input muted over 50 ms, damping off) |
+| CROSSOVER (panel: SPLIT FREQ) | 80·125^v Hz (80 Hz–10 kHz) |
+| DAMPING (panel: DAMP CUT) | tank corner 1000·20^v Hz, open at v ≥ 0.995 |
+| HIGH CUT (panel: IN CUT) | input corner 1000·20^v Hz, open at v ≥ 0.995 |
 | PREDELAY | 1000·v² ms (0–1000 ms) |
 | SIZE | ×0.5·4^v (×0.5–×2) on the program's delays |
-| MOD RATE | 0.1·50^v Hz; depth = the program's excursion × (0.5 + v) |
-| MODULATION | on / off |
+| MOD RATE | 0.1·50^v Hz (rate only) |
+| MOD DEPTH | 2·v × the program's excursion (0 = no modulation) |
+| MODULATION | on / off; off gives no modulation whatever MOD DEPTH says (hidden in the panel) |
 | DIFFUSION | input allpasses g = 0.75·v, decay allpasses g = 0.7·v |
 | CLARITY | tank allpass g = 0.70 − 0.55·v |
 | DISTANCE | late taps ×(0.35 + 0.65·v), early taps ×(1 − v) |
@@ -92,30 +93,37 @@ Control value v = 0…1 as the plugin stores it.
 ## 5. Plugin parameters
 
 Stable ids, append only (`src/tearwash/plugin/TwParams.cpp`). The panel and the host show the
-units above; text entry accepts them ("3.5", "Hold", "Open", "x1.5").
+units above; text entry accepts them ("3.5", "Hold", "Open", "x1.5", "+12 st"). Host names are
+those of the panel's labels, except where the key says otherwise (`decay` is HIGH DECAY,
+`crossover` SPLIT FREQ, `damping` DAMP CUT, `highcut` IN CUT). The panel hides `modulation`,
+`rear` and `ingain`: they keep their ids and defaults, and the host can still set them.
 
 | Id | Key | Name | Range |
 | --- | --- | --- | --- |
 | 0 | `program` | Program | 0–9 |
-| 1 | `decay` | Decay | 0–1 (0.2–60 s, Hold) |
+| 1 | `decay` | High Decay | 0–1 (0.2–60 s, Hold) |
 | 2 | `lowdecay` | Low Decay | 0–1 (0.2–60 s) |
-| 3 | `crossover` | Crossover | 0–1 (80 Hz–10 kHz) |
-| 4 | `damping` | Damping | 0–1 (1–20 kHz, Open) |
+| 3 | `crossover` | Split Freq | 0–1 (80 Hz–10 kHz) |
+| 4 | `damping` | Damp Cut | 0–1 (1–20 kHz, Open) |
 | 5 | `distance` | Distance | 0–1 |
 | 6 | `predelay` | Predelay | 0–1 (0–1000 ms) |
 | 7 | `diffusion` | Diffusion | 0–1 |
 | 8 | `modulation` | Modulation | on / off |
 | 9 | `modrate` | Mod Rate | 0–1 (0.1–5 Hz) |
-| 10 | `rear` | Rear Outputs | on / off (outputs B/D instead of A/C) |
+| 10 | `rear` | Rear Outputs | on / off (outputs B/D instead of A/C); hidden in the panel |
 | 11 | `size` | Size | 0–1 (×0.5–×2) |
 | 12 | `clarity` | Clarity | 0–1 |
-| 13 | `highcut` | High Cut | 0–1 (1–20 kHz, Open) |
+| 13 | `highcut` | In Cut | 0–1 (1–20 kHz, Open) |
 | 14 | `mix` | Mix | 0–100 % (default 35 %) |
-| 15 | `ingain` | Input Gain | −12 … +12 dB |
+| 15 | `ingain` | Input Gain | −12 … +12 dB; hidden in the panel (0 dB) |
 | 16 | `outgain` | Output Gain | −60 dB (= −∞) … +12 dB |
+| 17 | `moddepth` | Mod Depth | 0–1 (0–100 %; 0 = no modulation) |
+| 18 | `shimmer` | Shimmer | 0–1 (0–100 %; 0 = off) |
+| 19 | `shimmerint` | Shimmer Interval | 0–1 in seven steps: −12, −7, +5, +7, +12, +19, +24 st (default +12) |
 
 Defaults: GRAND HALL with its stored settings, Mix 35 % [D]. Selecting a program (panel or host)
-loads its stored settings into ids 1–9 and 11–13; Mix, gains and Rear Outputs stay.
+loads its stored settings into ids 1–9, 11–13 and 17; Mix, gains, Rear Outputs and the shimmer
+controls (18, 19) stay.
 
 ## 6. Tests
 
@@ -127,3 +135,38 @@ loads its stored settings into ids 1–9 and 11–13; Mix, gains and Rear Output
   faders, wheel, toggles and program buttons; idle frames do not redraw; state round trip;
   parameter text.
 - `tearwash_preset_test`: 03 §6.
+- `tearwash_dsp_test`, shimmer (§7): off is bit-identical to the plain reverb; +12, +7 and −12 put at least
+  15 dB more energy at the shifted frequency than the unshifted reverb; decay 60 s with amount 1 stays
+  finite and bounded (peak < 8) for 60 s of tail, for every interval of the set on GRAND HALL, PLATE
+  and VAST SPACE.
+
+## 7. Shimmer [A]
+
+Requested by Plumeflow (its spec 09). The panel's AMOUNT and INTERVAL knobs set `Controls::shimmer`
+and `shimmerInterval` (ids 18, 19); the plugin sets `shimmerMode` when AMOUNT is above 0, so at 0
+the path is off and does no work.
+
+| Control | Meaning |
+| --- | --- |
+| `shimmerMode` | off by default; with it off the path does no work and the output is bit-identical to the reverb without shimmer |
+| `shimmer` | 0…1, the amount of pitch-shifted energy fed back into the tank input |
+| `shimmerInterval` | semitones, −24…+24 (the usual set: −12, −7, +5, +7, +12, +19, +24; default +12) |
+
+Structure: the output taps of both channels (before DISTANCE) feed a two-tap delay-line pitch
+shifter (one line per channel, window 70 ms, taps half a window apart with a smoothstep crossfade, cubic
+reads; the tap phase moves by (1 − ratio)/window per sample). The shifted signal is band-limited
+(one-pole high-pass 140 Hz, two cascaded one-pole low-passes at 6.5 kHz, so the repeated shifts
+cannot pile up as metallic top end), scaled by 0.6·amount, soft-limited by y/(1 + |y|) and injected into the
+tank input of the next sample (L into half 0, R into half 1). The soft limit bounds the injection to
+±1 whatever the tank level, so the tail cannot run away; the loop guard (±8) stays. Measured
+(`tearwash_dsp_test`): +12 gives +36.8 dB at the octave, −12 +31.7 dB, +7 +17.6 dB; decay 60 s with
+amount 1 peaks at 2.5 or less after a full-scale noise burst.
+
+- The path fades in and out over 50 ms, is switched off in HOLD (the frozen tail stays as it is) and in
+  the ENSEMBLE program, and stops its work once it has faded out. Changing the interval moves the tap
+  phase smoothly (no click, a short glide).
+- `setSampleRate` allocates the shifter lines (window plus a few samples per channel); `process` and
+  `setControls` allocate nothing. Works at every sample rate (the window and corners are set from
+  times and frequencies).
+- No latency.
+
