@@ -43,3 +43,6 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
   values, level knobs beside motion and shimmer, headroom meter removed (it only showed the input peak).
   A program change from the panel or the host makes the preset that program's PG preset. PL Bright Shimmer
   Plate and SP Diamond Dust Shimmer now set shimmer.
+- 2026-10-18 — Panel look: dark rounded buttons (the selected program has a light outline), dark fader caps
+  with a light centre line, plain dark knobs with a thin pointer, a diagonal blue-grey gradient, a light
+  preset name instead of the red LED; the preset menu follows.
