@@ -31,13 +31,13 @@ Names start with a category code; the menu lists the categories in this order:
 | PG | Programs | every program with its stored settings (10), generated from the program list |
 | HL | Halls | |
 | RM | Rooms & Chambers | |
-| PL | Plates | |
-| SP | Space | long tails (8–58 s), long predelays (up to 1 s), deep modulation; the largest group (25) |
+| PL | Plates | three of them with shimmer (AMOUNT and INTERVAL set) |
+| SP | Space | long tails (8–58 s), long predelays (up to 1 s), deep modulation, three with shimmer; the largest group (28) |
 | EC | Echo & Delay | the ensemble as echo, predelay "space delays" |
 | FX | Ensemble & Effects | |
 | User | the user folder | |
 
-The factory presets (69) are defined in `tools/preset_library.py` and generated into
+The factory presets (75) are defined in `tools/preset_library.py` and generated into
 `src/tearwash/plugin/TwPresetData.cpp` by `python3 tools/gen_presets.py` (which checks
 keys, program names and ranges; never edit the generated file). Values are given in units
 (seconds, Hz, ms, ×SIZE, %) through the library's helpers. Names may evoke famous records, films

@@ -7,7 +7,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 | --- | --- | --- |
 | TW1 | Engine: figure-of-eight tank, ten programs, laws in units, hold, ensemble echo | ✅ |
 | TW2 | Plugin `tearwash.clap`: parameters, state, panel, headroom meter | ✅ |
-| TW3 | Presets: `.twpreset`, 69 factory presets (25 space), loudness trims, CLAP preset-load and discovery | ✅ |
+| TW3 | Presets: `.twpreset`, 75 factory presets (28 space, 6 with shimmer), loudness trims, CLAP preset-load and discovery | ✅ |
 | TW4 | Tests: dsp, gui, preset | ✅ |
 | TW5 | CPU profile and optimisation (SIMD for the tank taps) | ⬜ |
 | TW6 | macOS GUI glue | ⬜ |
@@ -36,3 +36,6 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
   description line at the bottom and each control shows its value; REAR OUT and INPUT are off the panel
   (ids kept); MODULATION is replaced by MOD RATE and MOD DEPTH knobs (MOD DEPTH 0 = none); SHIMMER AMOUNT
   and INTERVAL knobs (ids 18, 19). Presets that set MOD RATE keep their sound through MOD DEPTH.
+- 2026-10-18 — Six shimmer presets (three plates, three space), 75 factory presets in all; loudness
+  trims refitted. The two existing "Shimmer" names (PL Bright Shimmer Plate, SP Diamond Dust Shimmer)
+  still have shimmer off.

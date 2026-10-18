@@ -27,6 +27,9 @@ def rate(f):
     return math.log(max(f, 0.1) / 0.1) / math.log(50.0)
 def pct(p):
     return p / 100.0
+SHIMMER_STEPS = [-12, -7, 5, 7, 12, 19, 24]   # the shimmer interval set (law::kShimmerSteps)
+def st(semitones):             # SHIMMER INTERVAL, stored
+    return SHIMMER_STEPS.index(semitones) / 6.0
 
 # (name, program, {key: value}); values 0..1 from the helpers; mix as a fraction; toggles 0/1.
 # ENSEMBLE: decay is the echo feedback (0..1), not a time.
@@ -73,6 +76,10 @@ PRESETS = [
     ('PL Classic Dense Plate', 'DENSE PLATE', dict(decay=sec(2.5), mix=0.28)),
     ('PL Twin Plates Wide', 'VOCAL PLATE', dict(decay=sec(2.0), size=size(1.5), mix=0.28)),
     ('PL Vintage Plate Eight-One', 'PLATE', dict(decay=sec(2.0), damping=hz(9000), mix=0.26)),
+    ('PL Halo Sheen Plate', 'DENSE PLATE', dict(decay=sec(3.5), damping=OPEN, shimmer=pct(35), shimmerint=st(12), mix=0.30)),
+    ('PL Silver Mist Shimmer', 'PLATE',
+     dict(decay=sec(5.0), lowdecay=sec(5.0), predelay=ms(30), shimmer=pct(25), shimmerint=st(19), mix=0.28)),
+    ('PL Glass Fifth Plate', 'VOCAL PLATE', dict(decay=sec(4.0), shimmer=pct(20), shimmerint=st(7), mix=0.28)),
 
     # ---- Space: long tails, long predelays ----------------------------------------------------
     ('SP Teardrops In Neon Rain', 'GRAND HALL',
@@ -116,6 +123,12 @@ PRESETS = [
     ('SP Interplanetary Drone', 'DARK HALL',
      dict(decay=sec(50), lowdecay=sec(60), crossover=xo(150), damping=hz(2500), predelay=ms(600), size=size(2.0), mix=0.50)),
     ('SP Cosmic Lullaby', 'VOCAL PLATE', dict(decay=sec(22), predelay=ms(220), modrate=pct(45), mix=0.42)),
+    ('SP Octave Choir Cathedral', 'VAST SPACE',
+     dict(decay=sec(22), lowdecay=sec(26), predelay=ms(220), shimmer=pct(45), shimmerint=st(12), mix=0.45)),
+    ('SP Aurora Staircase', 'GRAND HALL',
+     dict(decay=sec(30), lowdecay=sec(34), predelay=ms(180), damping=hz(6000), shimmer=pct(55), shimmerint=st(19), mix=0.45)),
+    ('SP Sunward Fall', 'VAST SPACE',
+     dict(decay=sec(40), lowdecay=sec(44), predelay=ms(300), shimmer=pct(40), shimmerint=st(-12), mix=0.45)),
 
     # ---- Echo and delay -----------------------------------------------------------------------
     ('EC Memphis Slapback', 'ENSEMBLE', dict(decay=0.12, predelay=ms(110), modrate=pct(10), mix=0.30)),
