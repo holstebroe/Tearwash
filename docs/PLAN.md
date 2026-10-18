@@ -12,7 +12,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 | TW5 | CPU profile and optimisation (SIMD for the tank taps) | ⬜ |
 | TW6 | macOS GUI glue | ⬜ |
 | TW7 | Tannhäuser integration (01 §4) | ⬜ deferred while Tannhäuser's UI is reworked on another branch |
-| TW8 | Shimmer in the engine (02 §7), requested by Plumeflow; not yet a plugin parameter | ✅ |
+| TW8 | Shimmer in the engine and on the panel (02 §7, AMOUNT and INTERVAL), requested by Plumeflow | ✅ |
 
 ## Decision log
 
@@ -31,4 +31,8 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 - 2026-10-17 — Shimmer in the engine (TW8): a pitch-shifted feedback path with `shimmer`, `shimmerInterval`
   and `shimmerMode` in `Controls` (02 §7), requested by Plumeflow's spec 09; bit-identical when off,
   bounded at decay 60 s. `tearwash_dsp_test` gains the off/pitch/stability cases. The plugin panel does not expose it yet.
-
+- 2026-10-18 — Panel pass: decay and space in signal order with the names IN CUT, SPLIT FREQ, LOW DECAY,
+  HIGH DECAY, DAMP CUT and SIZE, PREDELAY, DIFFUSION, CLARITY, DISTANCE; the info box is replaced by a
+  description line at the bottom and each control shows its value; REAR OUT and INPUT are off the panel
+  (ids kept); MODULATION is replaced by MOD RATE and MOD DEPTH knobs (MOD DEPTH 0 = none); SHIMMER AMOUNT
+  and INTERVAL knobs (ids 18, 19). Presets that set MOD RATE keep their sound through MOD DEPTH.

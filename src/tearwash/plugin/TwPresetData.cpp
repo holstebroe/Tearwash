@@ -28,51 +28,51 @@ const TwPresetValue v20[] = { { "decay", 0.3852223655 }, { "damping", 0.88093897
 const TwPresetValue v21[] = { { "decay", 0.3141353088 }, { "damping", 1 }, { "mix", 0.25 }, { "outgain", 2.21 } };
 const TwPresetValue v22[] = { { "decay", 0.4747814653 }, { "mix", 0.28 }, { "outgain", 2.59 } };
 const TwPresetValue v23[] = { { "decay", 0.6103388593 }, { "lowdecay", 0.6103388593 }, { "predelay", 0.1414213562 }, { "mix", 0.3 }, { "outgain", 2.79 } };
-const TwPresetValue v24[] = { { "decay", 0.5252185347 }, { "damping", 1 }, { "modrate", 0.6 }, { "mix", 0.3 }, { "outgain", 2.79 } };
+const TwPresetValue v24[] = { { "decay", 0.5252185347 }, { "damping", 1 }, { "modrate", 0.6 }, { "mix", 0.3 }, { "moddepth", 0.55 }, { "outgain", 2.79 } };
 const TwPresetValue v25[] = { { "decay", 0.4860965043 }, { "lowdecay", 0.5252185347 }, { "mix", 0.28 }, { "outgain", 2.45 } };
 const TwPresetValue v26[] = { { "decay", 0.442816439 }, { "mix", 0.28 }, { "outgain", 2.59 } };
 const TwPresetValue v27[] = { { "decay", 0.4036944086 }, { "size", 0.7924812504 }, { "mix", 0.28 }, { "outgain", 2.71 } };
 const TwPresetValue v28[] = { { "decay", 0.4036944086 }, { "damping", 0.7334515827 }, { "mix", 0.26 }, { "outgain", 2.3 } };
 const TwPresetValue v29[] = { { "decay", 0.8073888172 }, { "lowdecay", 0.8533871115 }, { "crossover", 0.2359901086 }, { "damping", 0.4627564263 }, { "predelay", 0.3872983346 }, { "size", 0.8390359526 }, { "mix", 0.45 }, { "outgain", 3.12 } };
-const TwPresetValue v30[] = { { "decay", 0.7889167741 }, { "lowdecay", 0.8240988128 }, { "predelay", 0.4242640687 }, { "damping", 0.5690588933 }, { "modrate", 0.4 }, { "mix", 0.45 }, { "outgain", 2.72 } };
+const TwPresetValue v30[] = { { "decay", 0.7889167741 }, { "lowdecay", 0.8240988128 }, { "predelay", 0.4242640687 }, { "damping", 0.5690588933 }, { "modrate", 0.4 }, { "mix", 0.45 }, { "moddepth", 0.45 }, { "outgain", 2.72 } };
 const TwPresetValue v31[] = { { "decay", 0.7178297175 }, { "lowdecay", 0.7448557621 }, { "predelay", 0.3464101615 }, { "damping", 0.7334515827 }, { "mix", 0.42 }, { "outgain", 3.23 } };
 const TwPresetValue v32[] = { { "decay", 0.8784758739 }, { "lowdecay", 0.9004197583 }, { "predelay", 0.5 }, { "size", 0.8390359526 }, { "mix", 0.48 }, { "outgain", 3.37 } };
 const TwPresetValue v33[] = { { "decay", 0.9495629306 }, { "lowdecay", 0.9940563035 }, { "crossover", 0.2737510261 }, { "damping", 0.3667257913 }, { "predelay", 0.632455532 }, { "mix", 0.5 }, { "outgain", 2.33 } };
-const TwPresetValue v34[] = { { "decay", 0.6673926481 }, { "lowdecay", 0.7025746867 }, { "modrate", 0.65 }, { "predelay", 0.3 }, { "mix", 0.42 }, { "outgain", 3.11 } };
+const TwPresetValue v34[] = { { "decay", 0.6673926481 }, { "lowdecay", 0.7025746867 }, { "modrate", 0.65 }, { "predelay", 0.3 }, { "mix", 0.42 }, { "moddepth", 0.575 }, { "outgain", 3.11 } };
 const TwPresetValue v35[] = { { "decay", 0.9289129433 }, { "lowdecay", 0.9289129433 }, { "predelay", 0.5477225575 }, { "damping", 0.6495607656 }, { "mix", 0.45 }, { "outgain", 1.67 } };
 const TwPresetValue v36[] = { { "decay", 0.7448557621 }, { "lowdecay", 0.7889167741 }, { "damping", 0.4181825524 }, { "predelay", 0.5477225575 }, { "mix", 0.5 }, { "outgain", 2.25 } };
 const TwPresetValue v37[] = { { "decay", 0.8073888172 }, { "lowdecay", 0.8393538435 }, { "predelay", 0.7071067812 }, { "distance", 0.9 }, { "mix", 0.48 }, { "outgain", 2.25 } };
-const TwPresetValue v38[] = { { "decay", 0.8465108476 }, { "lowdecay", 0.9055019186 }, { "crossover", 0.1897744806 }, { "modrate", 0.25 }, { "size", 1 }, { "mix", 0.48 }, { "outgain", 3.79 } };
+const TwPresetValue v38[] = { { "decay", 0.8465108476 }, { "lowdecay", 0.9055019186 }, { "crossover", 0.1897744806 }, { "modrate", 0.25 }, { "size", 1 }, { "mix", 0.48 }, { "moddepth", 0.375 }, { "outgain", 3.79 } };
 const TwPresetValue v39[] = { { "decay", 0.8393538435 }, { "lowdecay", 0.8393538435 }, { "predelay", 0.6708203932 }, { "mix", 0.4 }, { "outgain", 1.92 } };
-const TwPresetValue v40[] = { { "decay", 0.9940563035 }, { "lowdecay", 0.9940563035 }, { "predelay", 0 }, { "modrate", 0.15 }, { "mix", 0.5 }, { "outgain", 1.65 } };
+const TwPresetValue v40[] = { { "decay", 0.9940563035 }, { "lowdecay", 0.9940563035 }, { "predelay", 0 }, { "modrate", 0.15 }, { "mix", 0.5 }, { "moddepth", 0.325 }, { "outgain", 1.65 } };
 const TwPresetValue v41[] = { { "decay", 0.9680349737 }, { "lowdecay", 0.9680349737 }, { "mix", 0.5 }, { "outgain", -0.86 } };
 const TwPresetValue v42[] = { { "decay", 0.7889167741 }, { "lowdecay", 0.8240988128 }, { "predelay", 0.5291502622 }, { "damping", 0.4627564263 }, { "mix", 0.45 }, { "outgain", 2.51 } };
-const TwPresetValue v43[] = { { "decay", 0.7682667868 }, { "lowdecay", 0.7682667868 }, { "modrate", 0.7 }, { "damping", 1 }, { "predelay", 0.3741657387 }, { "mix", 0.45 }, { "outgain", 3.73 } };
-const TwPresetValue v44[] = { { "decay", 0.6858646912 }, { "lowdecay", 0.7178297175 }, { "size", 1 }, { "modrate", 0.5 }, { "predelay", 0.2449489743 }, { "mix", 0.45 }, { "outgain", 4.18 } };
+const TwPresetValue v43[] = { { "decay", 0.7682667868 }, { "lowdecay", 0.7682667868 }, { "modrate", 0.7 }, { "damping", 1 }, { "predelay", 0.3741657387 }, { "mix", 0.45 }, { "moddepth", 0.6 }, { "outgain", 3.73 } };
+const TwPresetValue v44[] = { { "decay", 0.6858646912 }, { "lowdecay", 0.7178297175 }, { "size", 1 }, { "modrate", 0.5 }, { "predelay", 0.2449489743 }, { "mix", 0.45 }, { "moddepth", 0.5 }, { "outgain", 4.18 } };
 const TwPresetValue v45[] = { { "decay", 0.9940563035 }, { "lowdecay", 0.9940563035 }, { "predelay", 1 }, { "mix", 0.5 }, { "outgain", 2.49 } };
 const TwPresetValue v46[] = { { "decay", 0.6467426608 }, { "lowdecay", 0.6673926481 }, { "predelay", 0.8660254038 }, { "mix", 0.45 }, { "outgain", 3.94 } };
 const TwPresetValue v47[] = { { "decay", 0.9847449693 }, { "lowdecay", 0.9847449693 }, { "predelay", 0.5656854249 }, { "size", 0.3390359526 }, { "mix", 0.45 }, { "outgain", 0.98 } };
 const TwPresetValue v48[] = { { "decay", 0.8073888172 }, { "lowdecay", 0.8073888172 }, { "damping", 0.3667257913 }, { "mix", 0.45 }, { "outgain", 2.04 } };
 const TwPresetValue v49[] = { { "decay", 0.7025746867 }, { "lowdecay", 0.7178297175 }, { "predelay", 0.4472135955 }, { "mix", 0.42 }, { "outgain", 3.02 } };
 const TwPresetValue v50[] = { { "decay", 0.8240988128 }, { "lowdecay", 0.8533871115 }, { "size", 0.7427134136 }, { "mix", 0.45 }, { "outgain", 3.26 } };
-const TwPresetValue v51[] = { { "decay", 0.9104409002 }, { "lowdecay", 0.9289129433 }, { "predelay", 0.5656854249 }, { "modrate", 0.55 }, { "damping", 0.5020733695 }, { "mix", 0.48 }, { "outgain", 2.3 } };
+const TwPresetValue v51[] = { { "decay", 0.9104409002 }, { "lowdecay", 0.9289129433 }, { "predelay", 0.5656854249 }, { "modrate", 0.55 }, { "damping", 0.5020733695 }, { "mix", 0.48 }, { "moddepth", 0.525 }, { "outgain", 2.3 } };
 const TwPresetValue v52[] = { { "decay", 0.9680349737 }, { "lowdecay", 0.9940563035 }, { "crossover", 0.1301921734 }, { "damping", 0.3058653605 }, { "predelay", 0.7745966692 }, { "size", 1 }, { "mix", 0.5 }, { "outgain", 3.44 } };
-const TwPresetValue v53[] = { { "decay", 0.8240988128 }, { "predelay", 0.469041576 }, { "modrate", 0.45 }, { "mix", 0.42 }, { "outgain", 3.95 } };
-const TwPresetValue v54[] = { { "decay", 0.12 }, { "predelay", 0.331662479 }, { "modrate", 0.1 }, { "mix", 0.3 }, { "outgain", 2.81 } };
-const TwPresetValue v55[] = { { "decay", 0.6 }, { "predelay", 0.4898979486 }, { "modrate", 0.15 }, { "mix", 0.35 }, { "outgain", 2.89 } };
-const TwPresetValue v56[] = { { "decay", 0.5 }, { "predelay", 0.4242640687 }, { "modrate", 0.5 }, { "mix", 0.4 }, { "outgain", 3.32 } };
+const TwPresetValue v53[] = { { "decay", 0.8240988128 }, { "predelay", 0.469041576 }, { "modrate", 0.45 }, { "mix", 0.42 }, { "moddepth", 0.475 }, { "outgain", 3.95 } };
+const TwPresetValue v54[] = { { "decay", 0.12 }, { "predelay", 0.331662479 }, { "modrate", 0.1 }, { "mix", 0.3 }, { "moddepth", 0.3 }, { "outgain", 2.81 } };
+const TwPresetValue v55[] = { { "decay", 0.6 }, { "predelay", 0.4898979486 }, { "modrate", 0.15 }, { "mix", 0.35 }, { "moddepth", 0.325 }, { "outgain", 2.89 } };
+const TwPresetValue v56[] = { { "decay", 0.5 }, { "predelay", 0.4242640687 }, { "modrate", 0.5 }, { "mix", 0.4 }, { "moddepth", 0.5 }, { "outgain", 3.32 } };
 const TwPresetValue v57[] = { { "decay", 0.62 }, { "predelay", 0.1732050808 }, { "damping", 0.5981040045 }, { "mix", 0.35 }, { "outgain", 2.72 } };
-const TwPresetValue v58[] = { { "decay", 0.7 }, { "predelay", 0.6123724357 }, { "damping", 0.4627564263 }, { "modrate", 0.3 }, { "mix", 0.4 }, { "outgain", 2.17 } };
-const TwPresetValue v59[] = { { "decay", 0.55 }, { "predelay", 0.6123724357 }, { "modrate", 0.2 }, { "mix", 0.35 }, { "outgain", 2.88 } };
+const TwPresetValue v58[] = { { "decay", 0.7 }, { "predelay", 0.6123724357 }, { "damping", 0.4627564263 }, { "modrate", 0.3 }, { "mix", 0.4 }, { "moddepth", 0.4 }, { "outgain", 2.17 } };
+const TwPresetValue v59[] = { { "decay", 0.55 }, { "predelay", 0.6123724357 }, { "modrate", 0.2 }, { "mix", 0.35 }, { "moddepth", 0.35 }, { "outgain", 2.88 } };
 const TwPresetValue v60[] = { { "decay", 0.4747814653 }, { "lowdecay", 0.50180751 }, { "predelay", 0.7071067812 }, { "mix", 0.4 }, { "outgain", 3.93 } };
 const TwPresetValue v61[] = { { "decay", 0.65 }, { "predelay", 0.7071067812 }, { "damping", 0.5372435737 }, { "mix", 0.35 }, { "outgain", 2.61 } };
-const TwPresetValue v62[] = { { "decay", 0.68 }, { "predelay", 0.7874007874 }, { "damping", 0.3667257913 }, { "modrate", 0.35 }, { "mix", 0.4 }, { "outgain", 2.46 } };
-const TwPresetValue v63[] = { { "modrate", 0.4 }, { "mix", 0.5 }, { "outgain", 4.43 } };
+const TwPresetValue v62[] = { { "decay", 0.68 }, { "predelay", 0.7874007874 }, { "damping", 0.3667257913 }, { "modrate", 0.35 }, { "mix", 0.4 }, { "moddepth", 0.425 }, { "outgain", 2.46 } };
+const TwPresetValue v63[] = { { "modrate", 0.4 }, { "mix", 0.5 }, { "moddepth", 0.45 }, { "outgain", 4.43 } };
 const TwPresetValue v64[] = { { "decay", 0.1215241261 }, { "size", 0.1315172029 }, { "clarity", 0.8 }, { "mix", 0.35 }, { "outgain", 3.19 } };
-const TwPresetValue v65[] = { { "decay", 0.442816439 }, { "modrate", 0.7 }, { "mix", 0.4 }, { "outgain", 3.81 } };
+const TwPresetValue v65[] = { { "decay", 0.442816439 }, { "modrate", 0.7 }, { "mix", 0.4 }, { "moddepth", 0.6 }, { "outgain", 3.81 } };
 const TwPresetValue v66[] = { { "mix", 0.5 }, { "outgain", 4.42 } };
-const TwPresetValue v67[] = { { "decay", 0.9680349737 }, { "lowdecay", 0.9680349737 }, { "modrate", 0.4 }, { "mix", 0.5 }, { "outgain", 2.18 } };
-const TwPresetValue v68[] = { { "decay", 0.5963055914 }, { "damping", 0.1353475782 }, { "highcut", 0.3058653605 }, { "modrate", 0.8 }, { "mix", 0.4 }, { "outgain", 3.75 } };
+const TwPresetValue v67[] = { { "decay", 0.9680349737 }, { "lowdecay", 0.9680349737 }, { "modrate", 0.4 }, { "mix", 0.5 }, { "moddepth", 0.45 }, { "outgain", 2.18 } };
+const TwPresetValue v68[] = { { "decay", 0.5963055914 }, { "damping", 0.1353475782 }, { "highcut", 0.3058653605 }, { "modrate", 0.8 }, { "mix", 0.4 }, { "moddepth", 0.65 }, { "outgain", 3.75 } };
 } // namespace
 
 const TwBuiltinPreset kTwBuiltinPresets[] = {
@@ -100,51 +100,51 @@ const TwBuiltinPreset kTwBuiltinPresets[] = {
     { "PL Snare Plate Eighty-Two", "PLATE", v21, 4 },
     { "PL Dense Silk Plate", "DENSE PLATE", v22, 3 },
     { "PL Long Steel Plate", "PLATE", v23, 5 },
-    { "PL Bright Shimmer Plate", "DENSE PLATE", v24, 5 },
+    { "PL Bright Shimmer Plate", "DENSE PLATE", v24, 6 },
     { "PL Rich Plate Bloom", "PLATE", v25, 4 },
     { "PL Classic Dense Plate", "DENSE PLATE", v26, 3 },
     { "PL Twin Plates Wide", "VOCAL PLATE", v27, 4 },
     { "PL Vintage Plate Eight-One", "PLATE", v28, 4 },
     { "SP Teardrops In Neon Rain", "GRAND HALL", v29, 8 },
-    { "SP Synthetic Skyline", "VAST SPACE", v30, 7 },
+    { "SP Synthetic Skyline", "VAST SPACE", v30, 8 },
     { "SP Mist Runners On The Shore", "VAST SPACE", v31, 6 },
     { "SP Starfield Cathedral", "VAST SPACE", v32, 6 },
     { "SP Monolith At Jupiter", "VAST SPACE", v33, 7 },
-    { "SP Oxygenic Drift", "GRAND HALL", v34, 6 },
+    { "SP Oxygenic Drift", "GRAND HALL", v34, 7 },
     { "SP Equinox Machines", "GRAND HALL", v35, 6 },
     { "SP Music For Terminals", "DARK HALL", v36, 6 },
     { "SP Prism Moon Shadow", "VAST SPACE", v37, 6 },
-    { "SP Ocean Of Solarion", "VAST SPACE", v38, 7 },
+    { "SP Ocean Of Solarion", "VAST SPACE", v38, 8 },
     { "SP Five Tone Encounter", "BRIGHT HALL", v39, 5 },
-    { "SP Frozen Nebula", "VAST SPACE", v40, 6 },
+    { "SP Frozen Nebula", "VAST SPACE", v40, 7 },
     { "SP Near Infinity Chamber", "CHAMBER", v41, 4 },
     { "SP Empty Highway Haze", "GRAND HALL", v42, 6 },
-    { "SP Diamond Dust Shimmer", "DENSE PLATE", v43, 7 },
-    { "SP Aurora Curtain Wash", "VAST SPACE", v44, 7 },
+    { "SP Diamond Dust Shimmer", "DENSE PLATE", v43, 8 },
+    { "SP Aurora Curtain Wash", "VAST SPACE", v44, 8 },
     { "SP Deep Space Relay", "VAST SPACE", v45, 5 },
     { "SP Nebula Long Delay", "VAST SPACE", v46, 5 },
     { "SP Dream Machine Cloud", "GRAND HALL", v47, 6 },
     { "SP Glacier Hall", "DARK HALL", v48, 5 },
     { "SP Ghost Choir Hall", "GRAND HALL", v49, 5 },
     { "SP Split Horizon Expanse", "VAST SPACE", v50, 5 },
-    { "SP Orbit Of Saturn Rings", "VAST SPACE", v51, 7 },
+    { "SP Orbit Of Saturn Rings", "VAST SPACE", v51, 8 },
     { "SP Interplanetary Drone", "DARK HALL", v52, 8 },
-    { "SP Cosmic Lullaby", "VOCAL PLATE", v53, 5 },
-    { "EC Memphis Slapback", "ENSEMBLE", v54, 5 },
-    { "EC Canyon Multitap", "ENSEMBLE", v55, 5 },
-    { "EC Chorus Echo Wash", "ENSEMBLE", v56, 5 },
+    { "SP Cosmic Lullaby", "VOCAL PLATE", v53, 6 },
+    { "EC Memphis Slapback", "ENSEMBLE", v54, 6 },
+    { "EC Canyon Multitap", "ENSEMBLE", v55, 6 },
+    { "EC Chorus Echo Wash", "ENSEMBLE", v56, 6 },
     { "EC Resonant Chord Cave", "ENSEMBLE", v57, 5 },
-    { "EC Dub Tape Plume", "ENSEMBLE", v58, 6 },
-    { "EC Dotted Eighths Anthem", "ENSEMBLE", v59, 5 },
+    { "EC Dub Tape Plume", "ENSEMBLE", v58, 7 },
+    { "EC Dotted Eighths Anthem", "ENSEMBLE", v59, 6 },
     { "EC Space Delay Five Hundred", "VAST SPACE", v60, 5 },
     { "EC Grand Canyon Echo", "ENSEMBLE", v61, 5 },
-    { "EC Long Echo Cloud", "ENSEMBLE", v62, 6 },
-    { "FX Classic Ensemble", "ENSEMBLE", v63, 3 },
+    { "EC Long Echo Cloud", "ENSEMBLE", v62, 7 },
+    { "FX Classic Ensemble", "ENSEMBLE", v63, 4 },
     { "FX Tight Gate Room", "ROOM", v64, 5 },
-    { "FX Plate Chorus Wide", "DENSE PLATE", v65, 4 },
+    { "FX Plate Chorus Wide", "DENSE PLATE", v65, 5 },
     { "FX Lush Ensemble", "ENSEMBLE", v66, 2 },
-    { "FX Endless Pad Maker", "PLATE", v67, 5 },
-    { "FX Underwater Hall", "GRAND HALL", v68, 6 },
+    { "FX Endless Pad Maker", "PLATE", v67, 6 },
+    { "FX Underwater Hall", "GRAND HALL", v68, 7 },
 };
 const int kTwBuiltinPresetCount = 69;
 

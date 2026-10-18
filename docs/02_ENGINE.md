@@ -77,14 +77,15 @@ Control value v = 0…1 as the plugin stores it.
 
 | Control | Law |
 | --- | --- |
-| DECAY, LOW DECAY | 0.2·300^v s (0.2–60 s); DECAY at v ≥ 0.997: hold (infinite decay, input muted over 50 ms, damping off) |
-| CROSSOVER | 80·125^v Hz (80 Hz–10 kHz) |
-| DAMPING | tank corner 1000·20^v Hz, open at v ≥ 0.995 |
-| HIGH CUT | input corner 1000·20^v Hz, open at v ≥ 0.995 |
+| DECAY (panel: HIGH DECAY), LOW DECAY | 0.2·300^v s (0.2–60 s); DECAY at v ≥ 0.997: hold (infinite decay, input muted over 50 ms, damping off) |
+| CROSSOVER (panel: SPLIT FREQ) | 80·125^v Hz (80 Hz–10 kHz) |
+| DAMPING (panel: DAMP CUT) | tank corner 1000·20^v Hz, open at v ≥ 0.995 |
+| HIGH CUT (panel: IN CUT) | input corner 1000·20^v Hz, open at v ≥ 0.995 |
 | PREDELAY | 1000·v² ms (0–1000 ms) |
 | SIZE | ×0.5·4^v (×0.5–×2) on the program's delays |
-| MOD RATE | 0.1·50^v Hz; depth = the program's excursion × (0.5 + v) |
-| MODULATION | on / off |
+| MOD RATE | 0.1·50^v Hz (rate only) |
+| MOD DEPTH | 2·v × the program's excursion (0 = no modulation) |
+| MODULATION | on / off; off gives no modulation whatever MOD DEPTH says (hidden in the panel) |
 | DIFFUSION | input allpasses g = 0.75·v, decay allpasses g = 0.7·v |
 | CLARITY | tank allpass g = 0.70 − 0.55·v |
 | DISTANCE | late taps ×(0.35 + 0.65·v), early taps ×(1 − v) |
@@ -92,30 +93,37 @@ Control value v = 0…1 as the plugin stores it.
 ## 5. Plugin parameters
 
 Stable ids, append only (`src/tearwash/plugin/TwParams.cpp`). The panel and the host show the
-units above; text entry accepts them ("3.5", "Hold", "Open", "x1.5").
+units above; text entry accepts them ("3.5", "Hold", "Open", "x1.5", "+12 st"). Host names are
+those of the panel's labels, except where the key says otherwise (`decay` is HIGH DECAY,
+`crossover` SPLIT FREQ, `damping` DAMP CUT, `highcut` IN CUT). The panel hides `modulation`,
+`rear` and `ingain`: they keep their ids and defaults, and the host can still set them.
 
 | Id | Key | Name | Range |
 | --- | --- | --- | --- |
 | 0 | `program` | Program | 0–9 |
-| 1 | `decay` | Decay | 0–1 (0.2–60 s, Hold) |
+| 1 | `decay` | High Decay | 0–1 (0.2–60 s, Hold) |
 | 2 | `lowdecay` | Low Decay | 0–1 (0.2–60 s) |
-| 3 | `crossover` | Crossover | 0–1 (80 Hz–10 kHz) |
-| 4 | `damping` | Damping | 0–1 (1–20 kHz, Open) |
+| 3 | `crossover` | Split Freq | 0–1 (80 Hz–10 kHz) |
+| 4 | `damping` | Damp Cut | 0–1 (1–20 kHz, Open) |
 | 5 | `distance` | Distance | 0–1 |
 | 6 | `predelay` | Predelay | 0–1 (0–1000 ms) |
 | 7 | `diffusion` | Diffusion | 0–1 |
 | 8 | `modulation` | Modulation | on / off |
 | 9 | `modrate` | Mod Rate | 0–1 (0.1–5 Hz) |
-| 10 | `rear` | Rear Outputs | on / off (outputs B/D instead of A/C) |
+| 10 | `rear` | Rear Outputs | on / off (outputs B/D instead of A/C); hidden in the panel |
 | 11 | `size` | Size | 0–1 (×0.5–×2) |
 | 12 | `clarity` | Clarity | 0–1 |
-| 13 | `highcut` | High Cut | 0–1 (1–20 kHz, Open) |
+| 13 | `highcut` | In Cut | 0–1 (1–20 kHz, Open) |
 | 14 | `mix` | Mix | 0–100 % (default 35 %) |
-| 15 | `ingain` | Input Gain | −12 … +12 dB |
+| 15 | `ingain` | Input Gain | −12 … +12 dB; hidden in the panel (0 dB) |
 | 16 | `outgain` | Output Gain | −60 dB (= −∞) … +12 dB |
+| 17 | `moddepth` | Mod Depth | 0–1 (0–100 %; 0 = no modulation) |
+| 18 | `shimmer` | Shimmer | 0–1 (0–100 %; 0 = off) |
+| 19 | `shimmerint` | Shimmer Interval | 0–1 in seven steps: −12, −7, +5, +7, +12, +19, +24 st (default +12) |
 
 Defaults: GRAND HALL with its stored settings, Mix 35 % [D]. Selecting a program (panel or host)
-loads its stored settings into ids 1–9 and 11–13; Mix, gains and Rear Outputs stay.
+loads its stored settings into ids 1–9, 11–13 and 17; Mix, gains, Rear Outputs and the shimmer
+controls (18, 19) stay.
 
 ## 6. Tests
 
@@ -134,9 +142,9 @@ loads its stored settings into ids 1–9 and 11–13; Mix, gains and Rear Output
 
 ## 7. Shimmer [A]
 
-Requested by Plumeflow (its spec 09). Engine-level only: `Controls::shimmer`, `shimmerInterval`
-and `shimmerMode` are not plugin parameters yet (the plugin leaves them at their defaults, so its
-sound is unchanged).
+Requested by Plumeflow (its spec 09). The panel's AMOUNT and INTERVAL knobs set `Controls::shimmer`
+and `shimmerInterval` (ids 18, 19); the plugin sets `shimmerMode` when AMOUNT is above 0, so at 0
+the path is off and does no work.
 
 | Control | Meaning |
 | --- | --- |

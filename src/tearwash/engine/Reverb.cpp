@@ -44,6 +44,7 @@ Controls def(double lowDecay, double decay, double crossover, double damping, do
     Controls c;
     c.lowDecay = lowDecay; c.decay = decay; c.crossover = crossover; c.damping = damping; c.distance = distance;
     c.predelay = pre; c.diffusion = dif; c.modRate = modRate; c.size = size; c.clarity = clarity; c.highCut = highCut;
+    c.modDepth = 0.5 * (0.5 + modRate);   // the depth that gave excursion × (0.5 + rate) before MOD DEPTH existed
     return c;
 }
 
@@ -197,7 +198,7 @@ void Reverb::configure() {
     gIn_ = 0.75 * c_.diffusion;
     gDif_ = 0.70 * c_.diffusion;
     gClar_ = 0.70 - 0.55 * c_.clarity;
-    modDepth_ = c_.modulation ? s.modMs * ms * (0.5 + c_.modRate) : 0.0;
+    modDepth_ = c_.modulation ? s.modMs * ms * 2.0 * c_.modDepth : 0.0;
     modPeriod_ = fs_ / law::modRateHz(c_.modRate);
     wLate_ = 0.35 + 0.65 * c_.distance;
     wEarly_ = 1.0 - c_.distance;

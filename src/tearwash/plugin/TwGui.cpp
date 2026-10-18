@@ -83,6 +83,37 @@ void lamp(Graphics& g, float cx, float cy, float r, Color c, bool on) {
     });
 }
 
+// What a control does, for the line at the bottom of the panel.
+const char* describe(const TwGui::Ctl& c) {
+    switch (c.kind) {
+        case TwGui::Kind::Program: return "Selects a program: the room type and its starting settings.";
+        case TwGui::Kind::PresetPrev: return "Steps back to the previous preset.";
+        case TwGui::Kind::PresetNext: return "Steps on to the next preset.";
+        case TwGui::Kind::PresetName: return "Opens the preset menu.";
+        case TwGui::Kind::PresetSave: return "Saves the current settings as a user preset.";
+        default: break;
+    }
+    switch (c.param) {
+        case TW_HIGHCUT: return "Filters the input before the reverb: lower values darken what goes in.";
+        case TW_CROSSOVER: return "The frequency that splits the tail into a low band and a high band.";
+        case TW_LOWDECAY: return "How long the low band rings, from 0.2 s to 60 s.";
+        case TW_DECAY: return "How long the high band rings; at the top the tail holds forever.";
+        case TW_DAMPING: return "A low-pass inside the loop: each pass darkens the tail. Open turns it off.";
+        case TW_SIZE: return "Scales every delay together: a bigger room at higher values.";
+        case TW_PREDELAY: return "Silence before the reverb starts, up to 1 s.";
+        case TW_DIFFUSION: return "How smeared the echoes are: higher is denser and smoother.";
+        case TW_CLARITY: return "How much the tank smears its tail: higher is clearer.";
+        case TW_DISTANCE: return "Early reflections (0 %) against the late tail (100 %): higher sounds further away.";
+        case TW_MODRATE: return "Speed of the slow drift in the delay lines.";
+        case TW_MODDEPTH: return "How far the drift moves the delays. 0 % is no modulation.";
+        case TW_SHIMMER: return "Feeds a pitch-shifted copy of the tail back in. 0 % is off.";
+        case TW_SHIMMERINT: return "Pitch of the shimmer, in semitones: -12, -7, +5, +7, +12, +19 or +24.";
+        case TW_MIX: return "Balance of dry sound and reverb: 0 % dry, 100 % reverb only.";
+        case TW_OUTGAIN: return "Level after the reverb.";
+        default: return "";
+    }
+}
+
 } // namespace
 
 TwGui::TwGui(TearwashClap* plugin) : plugin_(plugin) {
@@ -102,26 +133,30 @@ TwGui::~TwGui() {
 void TwGui::layout() {
     ctls_.clear();
     for (int i = 0; i < programCount(); ++i)
-        ctls_.push_back({ Kind::Program, -1, 20.f + i * 86.6f, 104.f, 80.f, 34.f, "", i });
+        ctls_.push_back({ Kind::Program, -1, 20.f + i * 86.6f, 58.f, 80.f, 34.f, "", i });
     // Preset bar: step, name (click: menu), save.
     ctls_.push_back({ Kind::PresetPrev, -1, 312.f, 13.f, 20.f, 22.f, "<", 0 });
     ctls_.push_back({ Kind::PresetName, -1, 336.f, 13.f, 190.f, 22.f, "", 0 });
     ctls_.push_back({ Kind::PresetNext, -1, 530.f, 13.f, 20.f, 22.f, ">", 0 });
     ctls_.push_back({ Kind::PresetSave, -1, 554.f, 13.f, 36.f, 22.f, "SAVE", 0 });
-    const struct { int p; const char* l; } faders[6] = {
-        { TW_DECAY, "DECAY" }, { TW_LOWDECAY, "LOW DECAY" }, { TW_CROSSOVER, "XOVER" }, { TW_DAMPING, "DAMPING" },
-        { TW_DISTANCE, "DISTANCE" }, { TW_PREDELAY, "PREDELAY" },
+    // Decay, in signal order: the input cut, the band split, the two band decays, the loop damping.
+    const struct { int p; const char* l; } decay[5] = {
+        { TW_HIGHCUT, "IN CUT" }, { TW_CROSSOVER, "SPLIT FREQ" }, { TW_LOWDECAY, "LOW DECAY" }, { TW_DECAY, "HIGH DECAY" },
+        { TW_DAMPING, "DAMP CUT" },
     };
-    for (int i = 0; i < 6; ++i) ctls_.push_back({ Kind::Fader, faders[i].p, 24.f + i * 58.f, 166.f, 40.f, 128.f, faders[i].l, 0 });
-    const struct { int p; const char* l; } knobs[5] = {
-        { TW_DIFFUSION, "DIFFUSION" }, { TW_CLARITY, "CLARITY" }, { TW_MODRATE, "MOD RATE" }, { TW_HIGHCUT, "HIGH CUT" },
-        { TW_SIZE, "SIZE" },
+    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, decay[i].p, 20.f + i * 58.f, 138.f, 40.f, 112.f, decay[i].l, 0 });
+    // Space, in signal order: the room's size, the predelay, the input diffusion, the tank's clarity, the early/late balance.
+    const struct { int p; const char* l; } space[5] = {
+        { TW_SIZE, "SIZE" }, { TW_PREDELAY, "PREDELAY" }, { TW_DIFFUSION, "DIFFUSION" }, { TW_CLARITY, "CLARITY" },
+        { TW_DISTANCE, "DISTANCE" },
     };
-    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Knob, knobs[i].p, 390.f + i * 62.f, 168.f, 46.f, 46.f, knobs[i].l, 0 });
-    const struct { int p; const char* l; } toggles[2] = { { TW_MODULATION, "MODULATION" }, { TW_REAR, "REAR OUT" } };
-    for (int i = 0; i < 2; ++i) ctls_.push_back({ Kind::Toggle, toggles[i].p, 386.f + i * 76.f, 252.f, 68.f, 22.f, toggles[i].l, 0 });
-    const struct { int p; const char* l; } levels[3] = { { TW_INGAIN, "INPUT" }, { TW_MIX, "MIX" }, { TW_OUTGAIN, "OUTPUT" } };
-    for (int i = 0; i < 3; ++i) ctls_.push_back({ Kind::Knob, levels[i].p, 722.f + i * 58.f, 168.f, 46.f, 46.f, levels[i].l, 0 });
+    for (int i = 0; i < 5; ++i) ctls_.push_back({ Kind::Fader, space[i].p, 330.f + i * 58.f, 138.f, 40.f, 112.f, space[i].l, 0 });
+    ctls_.push_back({ Kind::Knob, TW_MIX, 650.f, 170.f, 46.f, 46.f, "MIX", 0 });
+    ctls_.push_back({ Kind::Knob, TW_OUTGAIN, 722.f, 170.f, 46.f, 46.f, "OUTPUT", 0 });
+    ctls_.push_back({ Kind::Knob, TW_MODRATE, 24.f, 316.f, 46.f, 46.f, "RATE", 0 });
+    ctls_.push_back({ Kind::Knob, TW_MODDEPTH, 86.f, 316.f, 46.f, 46.f, "DEPTH", 0 });
+    ctls_.push_back({ Kind::Knob, TW_SHIMMER, 334.f, 316.f, 46.f, 46.f, "AMOUNT", 0 });
+    ctls_.push_back({ Kind::Knob, TW_SHIMMERINT, 396.f, 316.f, 46.f, 46.f, "INTERVAL", 0 });
 }
 
 int TwGui::controlAt(int x, int y) const {
@@ -158,22 +193,10 @@ void TwGui::setNorm(int param, double n) {
     plugin_->onParamValueFromGui(static_cast<clap_id>(param), v);
 }
 
-std::string TwGui::readoutText() const {
+std::string TwGui::tooltipText() const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     const int i = active_ >= 0 ? active_ : hover_;
-    char buf[96];
-    if (i >= 0 && ctls_[static_cast<size_t>(i)].param >= 0 && enabled(ctls_[static_cast<size_t>(i)])) {
-        const int p = ctls_[static_cast<size_t>(i)].param;
-        char v[48];
-        twValueText(static_cast<uint32_t>(p), plugin_->paramValue(static_cast<clap_id>(p)), v, sizeof v);
-        std::string name = twParamInfo(static_cast<uint32_t>(p)).name;
-        std::snprintf(buf, sizeof buf, "%s  %s", name.c_str(), v);
-        std::string s = buf;
-        for (char& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        return s;
-    }
-    std::snprintf(buf, sizeof buf, "%s", programName(plugin_->program()));
-    return buf;
+    return i >= 0 ? std::string(describe(ctls_[static_cast<size_t>(i)])) : std::string();
 }
 
 // --- Drawing -------------------------------------------------------------------------------------
@@ -189,7 +212,7 @@ std::string TwGui::stateKey() const {
                   menuOpen_ ? 1 : 0, menuCat_, menuScroll_, menuHover_);
     k += buf;
     k += plugin_->presetName() + (plugin_->presetModified() ? "*" : "");
-    return k + readoutText();
+    return k;
 }
 
 void TwGui::drawStatic(Graphics& g) {
@@ -204,20 +227,21 @@ void TwGui::drawStatic(Graphics& g) {
     fill(g, 0, H - 2, W, H, 0xFF08090A);
     drawText(g, kDisplayFont, "TEARWASH", 20.f, 14.f, 16.f, 0xFFF0EEE6);
     drawText(g, kLabelFont, "ALGORITHMIC REVERB", 170.f, 19.f, 6.f, kSilkDim);
-    // LED display window.
-    roundRect(g, 20, 48, 880, 88, 3.f, [](float, float v, float d) {
-        Color c{ 0.05f, 0.012f, 0.01f };
-        c = scale(c, 1.f + 0.5f * v);
-        return toArgb(mix(c, { 0.30f, 0.30f, 0.31f }, smoothstep(-1.5f, 0.f, d)), 1.f);
-    });
-    // Section prints.
-    drawText(g, kLabelFont, "PROGRAM", 20.f, 90.f, 5.f, kSilkDim);
-    drawLineAA(g, 20, 156, 362, 156, 0.8f, kSilkDim);
-    label(g, "DECAY", 191.f, 150.f, kSilkDim, 5.f);
-    drawLineAA(g, 384, 156, 696, 156, 0.8f, kSilkDim);
-    label(g, "SPACE  /  MOTION", 540.f, 150.f, kSilkDim, 5.f);
-    drawLineAA(g, 718, 156, 880, 156, 0.8f, kSilkDim);
-    label(g, "LEVEL", 799.f, 150.f, kSilkDim, 5.f);
+    // Program row, then two rows of controls: decay, space and level; motion, shimmer and headroom.
+    drawText(g, kLabelFont, "PROGRAM", 20.f, 46.f, 5.f, kSilkDim);
+    label(g, "DECAY", 156.f, 110.f, kSilkDim, 5.f);
+    drawLineAA(g, 20, 118, 292, 118, 0.8f, kSilkDim);
+    label(g, "SPACE", 466.f, 110.f, kSilkDim, 5.f);
+    drawLineAA(g, 330, 118, 602, 118, 0.8f, kSilkDim);
+    label(g, "LEVEL", 710.f, 110.f, kSilkDim, 5.f);
+    drawLineAA(g, 640, 118, 880, 118, 0.8f, kSilkDim);
+    label(g, "MOTION", 78.f, 282.f, kSilkDim, 5.f);
+    drawLineAA(g, 20, 290, 140, 290, 0.8f, kSilkDim);
+    label(g, "SHIMMER", 388.f, 282.f, kSilkDim, 5.f);
+    drawLineAA(g, 330, 290, 446, 290, 0.8f, kSilkDim);
+    label(g, "HEADROOM", 740.f, 282.f, kSilkDim, 5.f);
+    drawLineAA(g, 640, 290, 880, 290, 0.8f, kSilkDim);
+    drawLineAA(g, 20, 376, 880, 376, 0.8f, kSilkDim);
     // Fader slots and scales.
     for (const Ctl& c : ctls_) {
         if (c.kind == Kind::Fader) {
@@ -241,12 +265,17 @@ void TwGui::drawStatic(Graphics& g) {
     }
     // Headroom meter prints.
     static const char* kMeter[6] = { "-24", "-18", "-12", "-6", "0", "OVL" };
-    for (int i = 0; i < 6; ++i) label(g, kMeter[i], 735.f + i * 27.f, 272.f, kSilkDim, 4.6f);
-    label(g, "HEADROOM", 802.f, 244.f, kSilkDim, 4.6f);
+    for (int i = 0; i < 6; ++i) label(g, kMeter[i], 672.f + i * 27.f, 322.f, kSilkDim, 4.6f);
 }
 
 void TwGui::drawControls(Graphics& g) {
     const int pg = plugin_->program();
+    // The current value, in the display font, above a fader or knob.
+    auto valueAbove = [&](const Ctl& c) {
+        char buf[48];
+        twValueText(static_cast<uint32_t>(c.param), plugin_->paramValue(static_cast<clap_id>(c.param)), buf, sizeof buf);
+        drawTextCentered(g, kDisplayFont, buf, c.x + c.w * 0.5f, c.y - 14.f, 5.2f, kLed);
+    };
     for (size_t i = 0; i < ctls_.size(); ++i) {
         const Ctl& c = ctls_[i];
         const bool en = enabled(c);
@@ -282,8 +311,8 @@ void TwGui::drawControls(Graphics& g) {
                     return toArgb(mix(col, scale(col, v < 0 ? 1.3f : 0.6f), smoothstep(-1.4f, 0.f, d) * 0.6f), 1.f);
                 });
                 drawLineAA(g, cx - hw + 2.f, y, cx + hw - 2.f, y, 1.2f, 0xFF141414);
-                const char* name = c.label;
-                label(g, name, cx, c.y + c.h + 4.f, en ? kSilk : 0x60A0A0A0);
+                label(g, c.label, cx, c.y + c.h + 4.f, en ? kSilk : 0x60A0A0A0, 5.4f);
+                valueAbove(c);
                 break;
             }
             case Kind::Knob: {
@@ -304,6 +333,7 @@ void TwGui::drawControls(Graphics& g) {
                     return toArgb(col, cov);
                 });
                 label(g, c.label, cx, c.y + c.h + 3.f, en ? kSilk : 0x60A0A0A0);
+                valueAbove(c);
                 break;
             }
             case Kind::PresetPrev:
@@ -331,34 +361,19 @@ void TwGui::drawControls(Graphics& g) {
                 drawText(g, kDisplayFont, name.c_str(), c.x + 6.f, c.y + (c.h - cap) * 0.5f, cap, kLed);
                 break;
             }
-            case Kind::Toggle: {
-                const bool on = plugin_->paramValue(static_cast<clap_id>(c.param)) >= 0.5;
-                softShadow(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.f, 2.5f, 0.45f);
-                roundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 2.5f, [&](float, float v, float d) {
-                    Color col = en ? Color{ 0.25f, 0.255f, 0.265f } : Color{ 0.15f, 0.15f, 0.155f };
-                    col = scale(col, (on ? 0.85f : 1.06f) - 0.16f * v);
-                    if (hot && en) col = scale(col, 1.15f);
-                    return toArgb(mix(col, scale(col, v < 0 ? 1.35f : 0.6f), smoothstep(-1.3f, 0.f, d) * 0.5f), 1.f);
-                });
-                label(g, c.label, c.x + c.w * 0.5f + 4.f, c.y + (c.h - 4.8f) * 0.5f, en ? kSilk : 0x60A0A0A0, 4.8f);
-                lamp(g, c.x + 6.f, c.y + c.h * 0.5f, 2.f, { 1.f, 0.25f, 0.12f }, on && en);
-                break;
-            }
         }
     }
-    // Display: the program on the left, the readout on the right.
-    drawText(g, kDisplayFont, programName(pg), 32.f, 61.f, 13.f, kLed);
-    const std::string r = (hover_ >= 0 || active_ >= 0) ? readoutText() : std::string();
-    if (!r.empty()) {
-        float cap = 11.f;
-        while (cap > 6.f && textWidth(kDisplayFont, r.c_str(), cap) > 430.f) cap -= 0.5f;
-        drawText(g, kDisplayFont, r.c_str(), 868.f - textWidth(kDisplayFont, r.c_str(), cap), 68.f - cap * 0.5f, cap, kLed);
-    }
+    // The description of the control under the pointer, on the line at the bottom.
+    const std::string tip = tooltipText();
+    const char* text = tip.empty() ? "Hover over a control to see what it does." : tip.c_str();
+    float cap = 6.2f;
+    while (cap > 4.6f && textWidth(kLabelFont, text, cap) > 850.f) cap -= 0.2f;
+    drawText(g, kLabelFont, text, 20.f, 386.f, cap, tip.empty() ? kSilkDim : kSilk);
     // Headroom LEDs.
     const int leds = plugin_->headroomLeds();
     for (int i = 0; i < 5; ++i)
-        lamp(g, 735.f + i * 27.f, 262.f, 3.f, i < 3 ? Color{ 0.25f, 0.95f, 0.35f } : Color{ 1.f, 0.8f, 0.15f }, i < leds);
-    lamp(g, 735.f + 5 * 27.f, 262.f, 3.f, { 1.f, 0.2f, 0.1f }, plugin_->overload());
+        lamp(g, 672.f + i * 27.f, 312.f, 3.f, i < 3 ? Color{ 0.25f, 0.95f, 0.35f } : Color{ 1.f, 0.8f, 0.15f }, i < leds);
+    lamp(g, 672.f + 5 * 27.f, 312.f, 3.f, { 1.f, 0.2f, 0.1f }, plugin_->overload());
     if (menuOpen_) drawMenu(g);
 }
 
@@ -552,11 +567,6 @@ void TwGui::handleMouseDown(int x, int y, bool shift) {
         case Kind::PresetName: openMenu(); break;
         case Kind::PresetSave: startSave(); break;
         case Kind::Program: plugin_->selectProgram(c.aux); break;
-        case Kind::Toggle:
-            plugin_->onBeginEditFromGui(static_cast<clap_id>(c.param));
-            plugin_->onParamValueFromGui(static_cast<clap_id>(c.param), plugin_->paramValue(static_cast<clap_id>(c.param)) >= 0.5 ? 0.0 : 1.0);
-            plugin_->onEndEditFromGui(static_cast<clap_id>(c.param));
-            break;
         case Kind::Fader:
         case Kind::Knob: {
             active_ = i;

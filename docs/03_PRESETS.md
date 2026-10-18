@@ -45,6 +45,10 @@ and artists, but are invented look-alikes, never a real title, name or trademark
 decays stop at 58 s: the top of DECAY is the hold, which mutes the input, so it belongs to live
 use.
 
+**Mod depth.** A preset that sets MOD RATE also gets MOD DEPTH = (0.5 + rate) / 2 unless it sets
+MOD DEPTH itself. That is the depth the earlier single MODULATION control gave at that rate, so
+the sound of those presets did not change when MOD DEPTH was added (`gen_presets.py` applies it).
+
 **Loudness.** Every factory preset carries an output-gain trim so that its output (dry + wet at
 its Mix) matches the input level for gently pinked noise within ±1.5 dB (the PG presets are left
 as the programs are). Workflow after adding or editing presets:
@@ -68,6 +72,8 @@ tools/preset_gains.json` → `python3 tools/gen_presets.py` → build. Trims spa
 - Clicking the name opens the menu over the panel: categories on the left, the category's
   presets in three columns (the wheel scrolls a column at a time), the current preset
   highlighted; a click loads a preset and closes the menu, a click outside closes it.
+- Every fader and knob shows its current value above it. The line at the bottom says what the
+  control under the pointer does; when nothing is under the pointer it shows a hint instead.
 
 ## 5. Host integration
 

@@ -124,6 +124,10 @@ Controls TearwashClap::controls() const {
     c.diffusion = paramValue(TW_DIFFUSION); c.modRate = paramValue(TW_MODRATE); c.size = paramValue(TW_SIZE);
     c.clarity = paramValue(TW_CLARITY); c.highCut = paramValue(TW_HIGHCUT);
     c.modulation = paramValue(TW_MODULATION) >= 0.5;
+    c.modDepth = paramValue(TW_MODDEPTH);
+    c.shimmer = paramValue(TW_SHIMMER);
+    c.shimmerInterval = law::shimmerSemitones(paramValue(TW_SHIMMERINT));
+    c.shimmerMode = c.shimmer > 0.0;
     return c;
 }
 
@@ -133,7 +137,8 @@ void TearwashClap::loadProgramSettings(int pg) {
     targetProgram_.store(pg);
     const TwValues v = twProgramValues(pg);
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i)
-        if (i != TW_MIX && i != TW_INGAIN && i != TW_OUTGAIN && i != TW_REAR) setValue(i, v[i]);
+        if (i != TW_MIX && i != TW_INGAIN && i != TW_OUTGAIN && i != TW_REAR && i != TW_SHIMMER && i != TW_SHIMMERINT)
+            setValue(i, v[i]);
 }
 
 void TearwashClap::selectProgram(int pg) {
