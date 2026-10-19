@@ -7,7 +7,7 @@ project(Tearwash VERSION 0.1.0 LANGUAGES C CXX)
 #
 # Options:
 #   TEARWASH_BUILD_PLUGIN   build tearwash.clap and the plugin tests (default: ON only when top-level)
-#   TEARWASH_CLAP_INCLUDE_DIR  CLAP headers; default: the clap/ submodule of this repository
+#   TEARWASH_CLAP_INCLUDE_DIR  CLAP headers; default: spux's third_party/clap
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(TEARWASH_TOP_LEVEL ON)
 else()
@@ -43,14 +43,6 @@ if(NOT TEARWASH_BUILD_PLUGIN)
     return()
 endif()
 
-if(NOT TEARWASH_CLAP_INCLUDE_DIR)
-    set(TEARWASH_CLAP_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/clap/include)
-endif()
-if(NOT EXISTS ${TEARWASH_CLAP_INCLUDE_DIR}/clap/clap.h)
-    message(FATAL_ERROR "CLAP headers not found in ${TEARWASH_CLAP_INCLUDE_DIR}. "
-                        "Run: git submodule update --init (or set TEARWASH_CLAP_INCLUDE_DIR).")
-endif()
-
 if(UNIX AND NOT APPLE)
     find_package(X11 REQUIRED)
     set(TEARWASH_GUI_LIBS ${X11_LIBRARIES})
@@ -62,22 +54,36 @@ elseif(WIN32)
     set(TEARWASH_GUI_LIBS gdi32 user32 comdlg32)
 endif()
 
+# The Classic drawing code comes from spux (extern/spux, pinned to a commit; SPUX_SOURCE_DIR points at
+# a local checkout while developing). Only the plugin needs it: the engine does not.
+if(NOT SPUX_SOURCE_DIR)
+    set(SPUX_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/spux)
+endif()
+if(NOT TARGET spux_ui_classic)
+    add_subdirectory(${SPUX_SOURCE_DIR} spux)
+endif()
+
+# CLAP headers: spux owns the clap submodule (third_party/clap); a parent project may override.
+if(NOT TEARWASH_CLAP_INCLUDE_DIR)
+    set(TEARWASH_CLAP_INCLUDE_DIR ${SPUX_SOURCE_DIR}/third_party/clap/include)
+endif()
+if(NOT EXISTS ${TEARWASH_CLAP_INCLUDE_DIR}/clap/clap.h)
+    message(FATAL_ERROR "CLAP headers not found in ${TEARWASH_CLAP_INCLUDE_DIR}. "
+                        "Run: git submodule update --init --recursive (or set TEARWASH_CLAP_INCLUDE_DIR).")
+endif()
+
 set(TEARWASH_PLUGIN_SOURCES
     src/tearwash/plugin/TwParams.cpp
     src/tearwash/plugin/TwPresets.cpp
     src/tearwash/plugin/TwPresetData.cpp
     src/tearwash/plugin/TearwashClap.cpp
     src/tearwash/plugin/TwGui.cpp
-    src/tearwash/gui/Font.cpp
-    src/tearwash/gui/FileDialog.cpp
-    src/tearwash/gui/Graphics.cpp
-    src/tearwash/gui/modern/ModernDraw.cpp
 )
 
 # Shared by the plugin and the tests.
 function(tearwash_configure target)
     target_include_directories(${target} PRIVATE ${TEARWASH_CLAP_INCLUDE_DIR} ${TEARWASH_X11_INCLUDE})
-    target_link_libraries(${target} PRIVATE tearwash_engine ${TEARWASH_GUI_LIBS})
+    target_link_libraries(${target} PRIVATE tearwash_engine spux_ui_classic ${TEARWASH_GUI_LIBS})
 endfunction()
 
 add_library(tearwash MODULE ${TEARWASH_PLUGIN_SOURCES})

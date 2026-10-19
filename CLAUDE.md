@@ -13,7 +13,12 @@ third-party DSP or GUI libraries.
 - Presets: edit `tools/preset_library.py`, run `python3 tools/gen_presets.py` (never edit
   `src/tearwash/plugin/TwPresetData.cpp`), rebuild, `build/tearwash_preset_test --fit
   tools/preset_gains.json`, regenerate and rebuild (`docs/03_PRESETS.md`).
-- `src/tearwash/gui/` is a vendored copy of Tannhäuser's procedural GUI toolkit (namespace
-  `tannhauser`); it is not kept in sync automatically.
+- The GUI drawing code (Graphics, Font, FileDialog, ClassicDraw, atlas fonts) comes from spux
+  (`spux_ui_classic`, `extern/spux`). Clone with `--recurse-submodules`; the plugin build needs spux and its
+  `third_party/clap` (the CLAP headers; Tearwash has no `clap` submodule of its own), the engine alone needs no spux.
+- **Using spux.** Shared code lives in spux (`extern/spux`, pinned to a commit until tags start). Change
+  shared code in spux (develop with `-DSPUX_SOURCE_DIR=...`), then bump the submodule here and compare the
+  `tearwash_gui_test` snapshot (pass a `.ppm` path) before and after: Classic drawing must stay identical
+  unless a look change is intended. This plugin's UI flavor: Classic. Character code stays here.
 - Nothing allocates, locks (except `try_lock`) or throws on the audio thread.
 - After changes run `build/tearwash_dsp_test`, `build/tearwash_preset_test`, `build/tearwash_gui_test`.

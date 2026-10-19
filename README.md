@@ -25,7 +25,7 @@ add_subdirectory(extern/tearwash)
 target_link_libraries(my_plugin PRIVATE tearwash_engine)   # #include "tearwash/engine/Reverb.hpp"
 ```
 
-With `TEARWASH_BUILD_PLUGIN` ON, set `TEARWASH_CLAP_INCLUDE_DIR` to your own CLAP headers to avoid
-initialising Tearwash's nested `clap` submodule.
+With `TEARWASH_BUILD_PLUGIN` ON, Tearwash needs spux (`extern/spux`, with its nested `third_party/clap`).
+Set `TEARWASH_CLAP_INCLUDE_DIR` to your own CLAP headers to use those instead of spux's.
 
 Specification and plan: [docs/](docs/README.md).

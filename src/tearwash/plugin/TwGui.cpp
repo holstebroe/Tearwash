@@ -1,11 +1,11 @@
 #include "TwGui.hpp"
-#include "tearwash/gui/FileDialog.hpp"
+#include "spux/ui/classic/FileDialog.hpp"
 #include <filesystem>
 #include "TearwashClap.hpp"
-#include "tearwash/gui/Graphics.hpp"
-#include "tearwash/gui/modern/ModernDraw.hpp"
-#include "tearwash/gui/modern/LabelFont.hpp"
-#include "tearwash/gui/modern/DisplayFont.hpp"
+#include "spux/ui/classic/Graphics.hpp"
+#include "spux/ui/classic/ClassicDraw.hpp"
+#include "spux/ui/classic/LabelFont.hpp"
+#include "spux/ui/classic/DisplayFont.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -27,8 +27,8 @@
 
 namespace tearwash {
 
-using tannhauser::Graphics;
-using namespace tannhauser::modern;
+using spux::ui::classic::Graphics;
+using namespace spux::ui::classic;
 
 namespace {
 
@@ -131,7 +131,7 @@ TwGui::TwGui(TearwashClap* plugin) : plugin_(plugin) {
 TwGui::~TwGui() {
     destroy();
 #if defined(__linux__) && !defined(__APPLE__)
-    delete static_cast<tannhauser::FileDialogProcess*>(saveDialog_);
+    delete static_cast<spux::ui::classic::FileDialogProcess*>(saveDialog_);
 #endif
 }
 
@@ -474,15 +474,15 @@ void TwGui::startSave() {
     if (dir.empty()) return;
     std::string base = plugin_->presetName();
     if (base.size() > 3 && base[2] == ' ') base = base.substr(3);
-    tannhauser::FileDialogOptions opt;
+    spux::ui::classic::FileDialogOptions opt;
     opt.save = true;
     opt.title = "Save Tearwash preset";
     opt.filterName = "Tearwash presets";
     opt.extension = "twpreset";
     opt.startPath = dir + "/" + base + ".twpreset";
 #if defined(__linux__) && !defined(__APPLE__)
-    auto* d = static_cast<tannhauser::FileDialogProcess*>(saveDialog_);
-    if (!d) { d = new tannhauser::FileDialogProcess(); saveDialog_ = d; }
+    auto* d = static_cast<spux::ui::classic::FileDialogProcess*>(saveDialog_);
+    if (!d) { d = new spux::ui::classic::FileDialogProcess(); saveDialog_ = d; }
     if (d->running()) return;
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
@@ -490,7 +490,7 @@ void TwGui::startSave() {
 #elif defined(_WIN32)
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
-    const std::filesystem::path p = tannhauser::runFileDialog(hwnd_, opt);
+    const std::filesystem::path p = spux::ui::classic::runFileDialog(hwnd_, opt);
     if (!p.empty()) savePresetAs(p.string());
     return;
 #endif
@@ -504,7 +504,7 @@ void TwGui::startSave() {
 
 void TwGui::pollSave() {
 #if defined(__linux__) && !defined(__APPLE__)
-    auto* d = static_cast<tannhauser::FileDialogProcess*>(saveDialog_);
+    auto* d = static_cast<spux::ui::classic::FileDialogProcess*>(saveDialog_);
     if (!d || !d->running()) return;
     std::string path;
     bool save = false;
