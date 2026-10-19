@@ -14,8 +14,8 @@ third-party DSP or GUI libraries.
   `src/tearwash/plugin/TwPresetData.cpp`), rebuild, `build/tearwash_preset_test --fit
   tools/preset_gains.json`, regenerate and rebuild (`docs/03_PRESETS.md`).
 - The GUI drawing code (Graphics, Font, FileDialog, ClassicDraw, atlas fonts) comes from spux
-  (`spux_ui_classic`, `extern/spux`). Clone with `--recurse-submodules`; the plugin build needs spux's
-  `third_party/clap` and `third_party/doctest`, the engine alone needs no spux.
+  (`spux_ui_classic`, `extern/spux`). Clone with `--recurse-submodules`; the plugin build needs spux and its
+  `third_party/clap` (the CLAP headers; Tearwash has no `clap` submodule of its own), the engine alone needs no spux.
 - **Using spux.** Shared code lives in spux (`extern/spux`, pinned to a commit until tags start). Change
   shared code in spux (develop with `-DSPUX_SOURCE_DIR=...`), then bump the submodule here and compare the
   `tearwash_gui_test` snapshot (pass a `.ppm` path) before and after: Classic drawing must stay identical
