@@ -13,17 +13,6 @@
 #include <cstdio>
 #include <cstring>
 
-#if defined(__linux__) && !defined(__APPLE__)
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#endif
-#if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <windowsx.h>
-#endif
 
 namespace tearwash {
 
@@ -490,7 +479,7 @@ void TwGui::startSave() {
 #elif defined(_WIN32)
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
-    const std::filesystem::path p = spux::ui::classic::runFileDialog(hwnd_, opt);
+    const std::filesystem::path p = spux::ui::classic::runFileDialog(window_ ? reinterpret_cast<void*>(window_->nativeHandle().handle) : nullptr, opt);
     if (!p.empty()) savePresetAs(p.string());
     return;
 #endif
@@ -543,11 +532,12 @@ void TwGui::renderFrame() {
             out[x] = 0xFF000000u | ((rb >> 2) & kLanes) | (((ga >> 2) & kLanes) << 8);
         }
     }
-#if defined(__linux__) && !defined(__APPLE__)
-    drawX11();
-#elif defined(_WIN32)
-    if (hwnd_) InvalidateRect(static_cast<HWND>(hwnd_), nullptr, FALSE);
-#endif
+    present();
+}
+
+void TwGui::present() {
+    if (window_) window_->present(pixels_.data(), static_cast<int>(kWidth), static_cast<int>(kHeight),
+                                  {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)});
 }
 
 // --- Input ---------------------------------------------------------------------------------------
@@ -646,196 +636,71 @@ void TwGui::handleWheel(int x, int y, int delta) {
 
 bool TwGui::setParent(const clap_window_t* window) {
     if (!window || !window->api) return false;
+    if (window_) return true;   // already open
+    spux::platform::ParentWindow parent;
 #if defined(__linux__) && !defined(__APPLE__)
-    if (std::strcmp(window->api, CLAP_WINDOW_API_X11) == 0) {
-        parent11_ = window->x11;
-        initX11();
-        return true;
-    }
+    if (std::strcmp(window->api, CLAP_WINDOW_API_X11) != 0) return false;
+    parent = {spux::platform::WindowApi::X11, static_cast<std::uintptr_t>(window->x11)};
 #elif defined(_WIN32)
-    if (std::strcmp(window->api, CLAP_WINDOW_API_WIN32) == 0) {
-        parentHwnd_ = window->win32;
-        initWin32();
-        return true;
-    }
-#endif
+    if (std::strcmp(window->api, CLAP_WINDOW_API_WIN32) != 0) return false;
+    parent = {spux::platform::WindowApi::Win32, reinterpret_cast<std::uintptr_t>(window->win32)};
+#else
     return false;
+#endif
+    // Set before open(): the window may call back as soon as it is open.
+    window_ = spux::platform::NativeWindow::create();
+    if (!window_) return false;
+    spux::platform::WindowOptions options;
+    options.keyboard = false;   // Tearwash has no key input; the host keeps its shortcuts
+    if (!window_->open(parent, static_cast<int>(kWidth), static_cast<int>(kHeight), this, options)) {
+        window_.reset();
+        return false;
+    }
+    window_->setTickRate(30);
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        drawnKey_.clear();
+        renderFrame();
+    }
+    return true;
 }
 
 bool TwGui::show() { visible_ = true; renderFrame(); return true; }
 bool TwGui::hide() { visible_ = false; return true; }
 
 void TwGui::destroy() {
-    running_ = false;
-    if (eventThread_.joinable()) eventThread_.join();
-#if defined(__linux__) && !defined(__APPLE__)
-    if (display11_ && created11_) {
-        Display* d = static_cast<Display*>(display11_);
-        XDestroyWindow(d, window11_);
-        XCloseDisplay(d);
-        display11_ = nullptr;
-        created11_ = false;
-    }
-#elif defined(_WIN32)
-    if (hwnd_) {
-        DestroyWindow(static_cast<HWND>(hwnd_));
-        hwnd_ = nullptr;
-    }
-#endif
+    // close() stops the callbacks (and joins the event thread on X11): do not hold the mutex here.
+    if (window_) window_->close();
+    window_.reset();
 }
 
-#if defined(__linux__) && !defined(__APPLE__)
-void TwGui::initX11() {
-    if (created11_) return;
-    Display* d = XOpenDisplay(nullptr);
-    if (!d) return;
-    display11_ = d;
-    const int screen = DefaultScreen(d);
-    const Window parent = parent11_ ? parent11_ : RootWindow(d, screen);
-    window11_ = XCreateSimpleWindow(d, parent, 0, 0, kWidth, kHeight, 0, BlackPixel(d, screen), BlackPixel(d, screen));
-    XSelectInput(d, window11_, ExposureMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
-    XMapWindow(d, window11_);
-    XFlush(d);
-    created11_ = true;
-    drawnKey_.clear();
-    renderFrame();
-    running_ = true;
-    eventThread_ = std::thread(&TwGui::eventLoopX11, this);
+// --- Native window events ------------------------------------------------------------------------
+
+void TwGui::onMouseDown(int x, int y, spux::platform::MouseButton button, bool shift) {
+    if (button == spux::platform::MouseButton::Left) handleMouseDown(x, y, shift);
 }
 
-void TwGui::eventLoopX11() {
-    try {
-        Display* d = static_cast<Display*>(display11_);
-        auto lastPaint = std::chrono::steady_clock::now();
-        while (running_) {
-            while (XPending(d) > 0) {
-                XEvent ev;
-                XNextEvent(d, &ev);
-                if (ev.type == Expose) {
-                    drawX11();
-                } else if (ev.type == ButtonPress) {
-                    const bool shift = (ev.xbutton.state & ShiftMask) != 0;
-                    if (ev.xbutton.button == Button1) handleMouseDown(ev.xbutton.x, ev.xbutton.y, shift);
-                    else if (ev.xbutton.button == Button4) handleWheel(ev.xbutton.x, ev.xbutton.y, 1);
-                    else if (ev.xbutton.button == Button5) handleWheel(ev.xbutton.x, ev.xbutton.y, -1);
-                } else if (ev.type == ButtonRelease && ev.xbutton.button == Button1) {
-                    handleMouseUp();
-                } else if (ev.type == MotionNotify) {
-                    if (ev.xmotion.state & Button1Mask) handleMouseDrag(ev.xmotion.x, ev.xmotion.y, (ev.xmotion.state & ShiftMask) != 0);
-                    else handleMouseMove(ev.xmotion.x, ev.xmotion.y);
-                }
-            }
-            const auto now = std::chrono::steady_clock::now();
-            if (visible_ && now - lastPaint >= std::chrono::milliseconds(33)) {
-                lastPaint = now;
-                renderFrame();
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-    } catch (...) {
-        // Never let an exception escape into the host.
-    }
+void TwGui::onMouseUp(int, int, spux::platform::MouseButton button) {
+    if (button == spux::platform::MouseButton::Left) handleMouseUp();
 }
 
-void TwGui::drawX11() {
+void TwGui::onMouseMove(int x, int y, bool leftDown, bool shift) {
+    if (leftDown) handleMouseDrag(x, y, shift);
+    else handleMouseMove(x, y);
+}
+
+void TwGui::onMouseWheel(int x, int y, float steps, bool) {
+    if (steps != 0.0f) handleWheel(x, y, steps > 0.0f ? 1 : -1);
+}
+
+void TwGui::onTick() {
+    if (visible_) renderFrame();
+}
+
+void TwGui::onExpose() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (!display11_ || !created11_) return;
-    Display* d = static_cast<Display*>(display11_);
-    const int screen = DefaultScreen(d);
-    XImage* img = XCreateImage(d, DefaultVisual(d, screen), 24, ZPixmap, 0, reinterpret_cast<char*>(pixels_.data()),
-                               kWidth, kHeight, 32, 0);
-    if (!img) return;
-    XPutImage(d, window11_, DefaultGC(d, screen), img, 0, 0, 0, 0, kWidth, kHeight);
-    img->data = nullptr;
-    XDestroyImage(img);
-    XFlush(d);
+    present();
 }
-#endif
-
-#if defined(_WIN32)
-static const wchar_t* kClassName = L"TearwashWindowClass";
-static bool g_classRegistered = false;
-
-static LRESULT CALLBACK wndProcImpl(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    TwGui* gui = reinterpret_cast<TwGui*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    switch (msg) {
-        case WM_CREATE: {
-            auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
-            SetTimer(hwnd, 1, 33, nullptr);
-            return 0;
-        }
-        case WM_TIMER: if (gui && gui->isVisible()) gui->renderFrame(); return 0;
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            BeginPaint(hwnd, &ps);
-            if (gui) gui->drawWin32();
-            EndPaint(hwnd, &ps);
-            return 0;
-        }
-        case WM_LBUTTONDOWN:
-            if (gui) {
-                SetCapture(hwnd);
-                gui->handleMouseDown(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), (wParam & MK_SHIFT) != 0);
-            }
-            return 0;
-        case WM_MOUSEMOVE:
-            if (gui) {
-                if (wParam & MK_LBUTTON) gui->handleMouseDrag(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), (wParam & MK_SHIFT) != 0);
-                else gui->handleMouseMove(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-            }
-            return 0;
-        case WM_LBUTTONUP: if (gui) { ReleaseCapture(); gui->handleMouseUp(); } return 0;
-        case WM_MOUSEWHEEL:
-            if (gui) {
-                POINT pt{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-                ScreenToClient(hwnd, &pt);
-                gui->handleWheel(pt.x, pt.y, GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? 1 : -1);
-            }
-            return 0;
-        case WM_DESTROY: KillTimer(hwnd, 1); return 0;
-    }
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
-}
-
-static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    try { return wndProcImpl(hwnd, msg, wParam, lParam); } catch (...) { return DefWindowProcW(hwnd, msg, wParam, lParam); }
-}
-
-void TwGui::initWin32() {
-    if (hwnd_) return;
-    HINSTANCE inst = GetModuleHandleW(nullptr);
-    if (!g_classRegistered) {
-        WNDCLASSW wc = {};
-        wc.lpfnWndProc = wndProc;
-        wc.hInstance = inst;
-        wc.lpszClassName = kClassName;
-        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        RegisterClassW(&wc);
-        g_classRegistered = true;
-    }
-    hwnd_ = CreateWindowExW(0, kClassName, L"Tearwash", WS_CHILD | WS_VISIBLE, 0, 0, kWidth, kHeight,
-                            static_cast<HWND>(parentHwnd_), nullptr, inst, this);
-    drawnKey_.clear();
-    renderFrame();
-}
-
-void TwGui::drawWin32() {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (!hwnd_) return;
-    HDC hdc = GetDC(static_cast<HWND>(hwnd_));
-    if (!hdc) return;
-    BITMAPINFO bmi = {};
-    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = static_cast<LONG>(kWidth);
-    bmi.bmiHeader.biHeight = -static_cast<LONG>(kHeight);
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-    SetDIBitsToDevice(hdc, 0, 0, kWidth, kHeight, 0, 0, 0, kHeight, pixels_.data(), &bmi, DIB_RGB_COLORS);
-    ReleaseDC(static_cast<HWND>(hwnd_), hdc);
-}
-#endif
 
 // --- CLAP GUI extension --------------------------------------------------------------------------
 

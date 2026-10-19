@@ -43,15 +43,13 @@ if(NOT TEARWASH_BUILD_PLUGIN)
     return()
 endif()
 
-if(UNIX AND NOT APPLE)
-    find_package(X11 REQUIRED)
-    set(TEARWASH_GUI_LIBS ${X11_LIBRARIES})
-    set(TEARWASH_X11_INCLUDE ${X11_INCLUDE_DIR})
-elseif(APPLE)
+# The native window (X11, Win32) is spux_platform, which brings the OS libraries on Linux; the common
+# file dialog on Windows is comdlg32 (spux_ui_classic).
+if(APPLE)
     find_library(COCOA_LIBRARY Cocoa)
     set(TEARWASH_GUI_LIBS ${COCOA_LIBRARY})
 elseif(WIN32)
-    set(TEARWASH_GUI_LIBS gdi32 user32 comdlg32)
+    set(TEARWASH_GUI_LIBS comdlg32)
 endif()
 
 # The Classic drawing code comes from spux (extern/spux, pinned to a commit; SPUX_SOURCE_DIR points at
@@ -82,8 +80,8 @@ set(TEARWASH_PLUGIN_SOURCES
 
 # Shared by the plugin and the tests.
 function(tearwash_configure target)
-    target_include_directories(${target} PRIVATE ${TEARWASH_CLAP_INCLUDE_DIR} ${TEARWASH_X11_INCLUDE})
-    target_link_libraries(${target} PRIVATE tearwash_engine spux_ui_classic ${TEARWASH_GUI_LIBS})
+    target_include_directories(${target} PRIVATE ${TEARWASH_CLAP_INCLUDE_DIR})
+    target_link_libraries(${target} PRIVATE tearwash_engine spux_ui_classic spux_platform ${TEARWASH_GUI_LIBS})
 endfunction()
 
 add_library(tearwash MODULE ${TEARWASH_PLUGIN_SOURCES})
