@@ -1,7 +1,8 @@
 // Tearwash plugin and GUI verification: every program renders a finite, decaying response
 // through the CLAP process call; the panel draws, its controls reach the parameters; host program
 // changes load the program's settings; the state round-trips. With a path argument it writes a
-// <path> snapshot for visual review.
+// <path> snapshot for visual review. With an X display (xvfb-run) it also opens the panel in a real
+// X11 window and checks that it shows the pixel buffer, and that clicks, wheel and the timer arrive.
 
 #include "tearwash/plugin/TearwashClap.hpp"
 #include "tearwash/plugin/TwGui.hpp"
@@ -11,6 +12,13 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <cstdlib>
+#include <thread>
+#if defined(__linux__) && !defined(__APPLE__)
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#endif
 
 using namespace tearwash;
 
@@ -103,6 +111,133 @@ static double impulseCheck(TearwashClap& p, const char* what) {
     CHECK(tail > 1e-6, "%s: reverberant tail (energy %.3g)", what, tail);
     return tail;
 }
+
+#if defined(__linux__) && !defined(__APPLE__)
+// The panel in a real X11 window: it shows the pixel buffer, repaints on its own, and takes input.
+static void windowTest(TearwashClap& p) {
+    if (!std::getenv("DISPLAY")) { std::printf("window test skipped (no DISPLAY)\n"); return; }
+    using namespace std::chrono_literals;
+    p.createGuiWindow();
+    TwGui& gui = *p.getGuiWindow();
+    clap_window_t parent = {};
+    parent.api = CLAP_WINDOW_API_X11;
+    parent.x11 = 0;   // the root window
+    bool opened = false;
+    for (int i = 0; i < 20 && !opened; ++i) {   // an X server under load can refuse a connection for a moment
+        opened = gui.setParent(&parent);
+        if (!opened) std::this_thread::sleep_for(50ms);
+    }
+    CHECK(opened, "panel opens in an X11 window");
+    if (!opened) { p.destroyGuiWindow(); return; }
+    CHECK(gui.setSize(TwGui::kWidth, TwGui::kHeight) && !gui.setSize(100, 100), "fixed size");
+    std::this_thread::sleep_for(300ms);
+
+    Display* d = XOpenDisplay(nullptr);
+    CHECK(d != nullptr, "second X connection");
+    if (!d) { p.destroyGuiWindow(); return; }
+    Window root, par, *kids = nullptr, found = 0;
+    unsigned n = 0;
+    XQueryTree(d, DefaultRootWindow(d), &root, &par, &kids, &n);
+    for (unsigned i = 0; i < n; ++i) {
+        XWindowAttributes a;
+        if (XGetWindowAttributes(d, kids[i], &a) && a.width == int(TwGui::kWidth) && a.height == int(TwGui::kHeight) && a.map_state == IsViewable) found = kids[i];
+    }
+    if (kids) XFree(kids);
+    CHECK(found != 0, "the panel window is mapped at %ux%u", TwGui::kWidth, TwGui::kHeight);
+    if (!found) { XCloseDisplay(d); p.destroyGuiWindow(); return; }
+
+    // The window shows the pixel buffer.
+    {
+        XImage* img = XGetImage(d, found, 0, 0, TwGui::kWidth, TwGui::kHeight, AllPlanes, ZPixmap);
+        CHECK(img != nullptr, "read the window back");
+        if (img) {
+            const auto& px = gui.getPixelBuffer();
+            long bad = 0;
+            for (uint32_t y = 0; y < TwGui::kHeight; y += 7)
+                for (uint32_t x = 0; x < TwGui::kWidth; x += 5)
+                    if ((XGetPixel(img, int(x), int(y)) & 0xFFFFFFul) != (px[y * TwGui::kWidth + x] & 0xFFFFFFu)) ++bad;
+            CHECK(bad == 0, "window pixels equal the panel (%ld differ)", bad);
+            XDestroyImage(img);
+        }
+    }
+
+    auto centre = [&](TwGui::Kind k, int id, int& x, int& y) {
+        const auto& c = gui.controls()[static_cast<size_t>(gui.findControl(k, id))];
+        x = static_cast<int>(c.x + c.w / 2); y = static_cast<int>(c.y + c.h / 2);
+    };
+    auto button = [&](int type, unsigned which, int x, int y, unsigned state = 0) {
+        XEvent e = {};
+        e.xbutton.type = type; e.xbutton.window = found; e.xbutton.x = x; e.xbutton.y = y; e.xbutton.button = which; e.xbutton.state = state;
+        XSendEvent(d, found, False, type == ButtonPress ? ButtonPressMask : ButtonReleaseMask, &e);
+        XFlush(d);
+    };
+    auto motion = [&](int x, int y, unsigned state) {
+        XMotionEvent m = {};
+        m.type = MotionNotify; m.window = found; m.x = x; m.y = y; m.state = state;
+        XSendEvent(d, found, False, PointerMotionMask, reinterpret_cast<XEvent*>(&m));
+        XFlush(d);
+    };
+    auto settle = [&] { std::this_thread::sleep_for(150ms); };
+    int x, y;
+
+    // Click: a program button selects its program.
+    centre(TwGui::Kind::Program, 2, x, y);
+    button(ButtonPress, Button1, x, y); button(ButtonRelease, Button1, x, y);
+    settle();
+    CHECK(p.program() == 2, "X11 click on a program button (%d)", p.program());
+
+    // Wheel (buttons 4 and 5): 0.5 % per notch, up and down.
+    centre(TwGui::Kind::Fader, TW_PREDELAY, x, y);
+    const double w0 = p.paramValue(TW_PREDELAY);
+    button(ButtonPress, Button4, x, y); button(ButtonRelease, Button4, x, y);
+    settle();
+    CHECK(std::fabs(p.paramValue(TW_PREDELAY) - (w0 + 0.005)) < 1e-9, "X11 wheel up (%.4f → %.4f)", w0, p.paramValue(TW_PREDELAY));
+    button(ButtonPress, Button5, x, y); button(ButtonRelease, Button5, x, y);
+    settle();
+    CHECK(std::fabs(p.paramValue(TW_PREDELAY) - w0) < 1e-9, "X11 wheel down");
+
+    // Drag (motion with button 1 held) moves a knob; hover (motion without) gives the tooltip.
+    centre(TwGui::Kind::Knob, TW_MODDEPTH, x, y);
+    const double m0 = p.paramValue(TW_MODDEPTH);
+    button(ButtonPress, Button1, x, y);
+    for (int i = 1; i <= 6; ++i) { motion(x, y - 5 * i, Button1Mask); std::this_thread::sleep_for(30ms); }
+    button(ButtonRelease, Button1, x, y - 30);
+    settle();
+    CHECK(p.paramValue(TW_MODDEPTH) > m0, "X11 drag raises the knob (%.3f → %.3f)", m0, p.paramValue(TW_MODDEPTH));
+    motion(x, y, 0);
+    settle();
+    CHECK(!gui.tooltipText().empty(), "X11 hover gives a tooltip");
+
+    // The timer repaints a changed panel without a call from outside: the change above reached the window.
+    {
+        XImage* img = XGetImage(d, found, 0, 0, TwGui::kWidth, TwGui::kHeight, AllPlanes, ZPixmap);
+        CHECK(img != nullptr, "read back after input");
+        if (img) {
+            const auto& px = gui.getPixelBuffer();
+            long bad = 0;
+            for (uint32_t yy = 0; yy < TwGui::kHeight; yy += 7)
+                for (uint32_t xx = 0; xx < TwGui::kWidth; xx += 5)
+                    if ((XGetPixel(img, int(xx), int(yy)) & 0xFFFFFFul) != (px[yy * TwGui::kWidth + xx] & 0xFFFFFFu)) ++bad;
+            CHECK(bad == 0, "window follows the panel after input (%ld differ)", bad);
+            XDestroyImage(img);
+        }
+    }
+
+    // Hidden: no repaints. Shown again: repaints.
+    gui.hide();
+    std::this_thread::sleep_for(100ms);
+    const int r0 = gui.redraws();
+    p.onParamValueFromGui(TW_SIZE, p.paramValue(TW_SIZE) > 0.5 ? 0.25 : 0.75);   // a change the panel would show
+    settle();
+    CHECK(gui.redraws() == r0, "the timer does not repaint a hidden panel");
+    gui.show();
+    CHECK(gui.redraws() > r0, "a shown panel repaints");
+
+    XCloseDisplay(d);
+    p.destroyGuiWindow();
+    CHECK(p.getGuiWindow() == nullptr, "destroyed");
+}
+#endif
 
 int main(int argc, char** argv) {
     const auto* factory = static_cast<const clap_plugin_factory_t*>(clap_entry.get_factory(CLAP_PLUGIN_FACTORY_ID));
@@ -239,6 +374,9 @@ int main(int argc, char** argv) {
         CHECK(gui.redraws() == r0, "idle frame does not redraw");
     }
     p.destroyGuiWindow();
+#if defined(__linux__) && !defined(__APPLE__)
+    windowTest(p);
+#endif
 
     // State round trip.
     p.selectProgram(3);   // ROOM

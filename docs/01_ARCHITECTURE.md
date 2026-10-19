@@ -18,7 +18,7 @@ Everything here is an added feature [A]: Tearwash models no particular hardware 
 | `src/tearwash/plugin/TwParams.*` | parameters: ids, keys, ranges, value text (the single source of truth) |
 | `src/tearwash/plugin/TwPresets.*`, `TwPresetData.cpp` | presets (03); `TwPresetData.cpp` is generated |
 | `src/tearwash/plugin/TearwashClap.*` | CLAP entry, params, state, preset-load, preset discovery |
-| `src/tearwash/plugin/TwGui.*` | the panel (Tannhäuser's procedural drawing, X11 / Win32 glue) |
+| `src/tearwash/plugin/TwGui.*` | the panel (Tannhäuser's procedural drawing; the window is spux's `spux::platform::NativeWindow`) |
 | `src/tests/tearwash_{dsp,gui,preset}_test_main.cpp` | tests (02 §6, 03 §6) |
 | `tools/` | preset library, generator, loudness trims |
 

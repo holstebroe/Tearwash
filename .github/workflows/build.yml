@@ -23,7 +23,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libx11-dev
+        sudo apt-get install -y libx11-dev xvfb
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -36,7 +36,7 @@ jobs:
       run: |
         build/tearwash_dsp_test
         build/tearwash_preset_test
-        build/tearwash_gui_test build/tearwash_snapshot.ppm
+        xvfb-run -a build/tearwash_gui_test build/tearwash_snapshot.ppm
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4

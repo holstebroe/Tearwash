@@ -4,16 +4,18 @@
 // Tearwash panel: drawn procedurally at 2× and box-filtered (Tannhäuser GUI rules), top to bottom:
 // the preset bar, the program buttons (two rows), the decay faders, the space faders, the motion,
 // shimmer and level knobs, and a one-line description of the control under the pointer. Each
-// control shows its value above it. X11 / Win32 glue as in Tannhäuser's GuiWindow.
+// control shows its value above it. The native window is spux's `spux::platform::NativeWindow`.
 
 #include <clap/clap.h>
 #include <clap/ext/gui.h>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
+
+#include "spux/platform/NativeWindow.hpp"
 
 namespace spux::inline v1::ui::classic { class Graphics; }
 
@@ -23,7 +25,7 @@ class TearwashClap;
 
 extern const clap_plugin_gui_t g_tearwashGuiExtension;
 
-class TwGui {
+class TwGui : private spux::platform::WindowEvents {
 public:
     static constexpr uint32_t kWidth = 640, kHeight = 628;
 
@@ -103,26 +105,17 @@ private:
     void setNorm(int param, double n);
     bool enabled(const Ctl& c) const;
 
-    std::atomic<bool> visible_{ true };
-    std::atomic<bool> running_{ false };
-    std::thread eventThread_;
+    // WindowEvents: the native window calls these on its event thread (X11) or the host UI thread (Win32).
+    void onMouseDown(int x, int y, spux::platform::MouseButton button, bool shift) override;
+    void onMouseUp(int x, int y, spux::platform::MouseButton button) override;
+    void onMouseMove(int x, int y, bool leftDown, bool shift) override;
+    void onMouseWheel(int x, int y, float steps, bool shift) override;
+    void onTick() override;
+    void onExpose() override;
+    void present();
 
-#if defined(__linux__) && !defined(__APPLE__)
-    void* display11_ = nullptr;
-    unsigned long window11_ = 0;
-    unsigned long parent11_ = 0;
-    bool created11_ = false;
-    void initX11();
-    void drawX11();
-    void eventLoopX11();
-#elif defined(_WIN32)
-    void* hwnd_ = nullptr;
-    void* parentHwnd_ = nullptr;
-public:
-    void initWin32();
-    void drawWin32();
-private:
-#endif
+    std::atomic<bool> visible_{ true };
+    std::unique_ptr<spux::platform::NativeWindow> window_;
 };
 
 } // namespace tearwash
