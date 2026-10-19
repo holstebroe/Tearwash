@@ -1,3 +1,6 @@
 [submodule "clap"]
 	path = clap
 	url = https://github.com/free-audio/clap.git
+[submodule "extern/spux"]
+	path = extern/spux
+	url = https://github.com/holstebroe/spux

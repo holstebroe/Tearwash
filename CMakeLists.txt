@@ -62,22 +62,28 @@ elseif(WIN32)
     set(TEARWASH_GUI_LIBS gdi32 user32 comdlg32)
 endif()
 
+# The Classic drawing code comes from spux (extern/spux, pinned to a commit; SPUX_SOURCE_DIR points at
+# a local checkout while developing). Only the plugin needs it: the engine does not.
+if(NOT TARGET spux_ui_classic)
+    if(SPUX_SOURCE_DIR)
+        add_subdirectory(${SPUX_SOURCE_DIR} spux)
+    else()
+        add_subdirectory(extern/spux spux)
+    endif()
+endif()
+
 set(TEARWASH_PLUGIN_SOURCES
     src/tearwash/plugin/TwParams.cpp
     src/tearwash/plugin/TwPresets.cpp
     src/tearwash/plugin/TwPresetData.cpp
     src/tearwash/plugin/TearwashClap.cpp
     src/tearwash/plugin/TwGui.cpp
-    src/tearwash/gui/Font.cpp
-    src/tearwash/gui/FileDialog.cpp
-    src/tearwash/gui/Graphics.cpp
-    src/tearwash/gui/modern/ModernDraw.cpp
 )
 
 # Shared by the plugin and the tests.
 function(tearwash_configure target)
     target_include_directories(${target} PRIVATE ${TEARWASH_CLAP_INCLUDE_DIR} ${TEARWASH_X11_INCLUDE})
-    target_link_libraries(${target} PRIVATE tearwash_engine ${TEARWASH_GUI_LIBS})
+    target_link_libraries(${target} PRIVATE tearwash_engine spux_ui_classic ${TEARWASH_GUI_LIBS})
 endfunction()
 
 add_library(tearwash MODULE ${TEARWASH_PLUGIN_SOURCES})

@@ -15,7 +15,7 @@
 #include <thread>
 #include <vector>
 
-namespace tannhauser { class Graphics; }
+namespace spux::inline v1::ui::classic { class Graphics; }
 
 namespace tearwash {
 
@@ -93,12 +93,12 @@ private:
     void openMenu();
     void fillMenuItems();
     int menuHit(int x, int y) const;                      // as menuHover_; −1: outside items
-    void drawMenu(tannhauser::Graphics& g);
+    void drawMenu(spux::ui::classic::Graphics& g);
     void startSave();
     void pollSave();
     void* saveDialog_ = nullptr;                          // Linux: the running file dialog process
-    void drawStatic(tannhauser::Graphics& g);
-    void drawControls(tannhauser::Graphics& g);
+    void drawStatic(spux::ui::classic::Graphics& g);
+    void drawControls(spux::ui::classic::Graphics& g);
     double norm(int param) const;
     void setNorm(int param, double n);
     bool enabled(const Ctl& c) const;
