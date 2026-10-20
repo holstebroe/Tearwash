@@ -1,6 +1,8 @@
 #include "TwPresets.hpp"
 #include "tearwash/engine/Reverb.hpp"
 
+#include "spux/state/TextPreset.hpp"
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -57,48 +59,39 @@ int twProgramIndex(const std::string& name) {
     return -1;
 }
 
+// The file format is spux's text preset (spux/state/TextPreset.hpp): header, then key=value lines.
 bool parsePresetText(const std::string& text, TwValues& values, std::string* name) {
-    std::istringstream in(text);
-    std::string line;
-    std::vector<std::pair<std::string, std::string>> kv;
-    while (std::getline(in, line)) {
-        line = trim(line);
-        if (line.empty() || line[0] == '#') continue;
-        const size_t eq = line.find('=');
-        if (eq == std::string::npos) continue;
-        kv.emplace_back(trim(line.substr(0, eq)), trim(line.substr(eq + 1)));
-    }
-    if (kv.empty()) return false;
+    namespace ss = spux::state;
+    ss::TextPreset tp;
+    if (!ss::parseTextPreset(text, tp)) return false;
     // The program first: the preset starts from that program's stored settings.
-    std::string program;
-    for (const auto& p : kv)
-        if (p.first == "program") program = p.second;
-    int pg = program.empty() ? static_cast<int>(values[TW_PROGRAM]) : twProgramIndex(program);
-    if (pg < 0) pg = std::atoi(program.c_str());
+    const std::string* program = tp.find("program");
+    int pg = static_cast<int>(values[TW_PROGRAM]);
+    if (program && !program->empty()) {
+        pg = twProgramIndex(*program);
+        if (pg < 0) pg = std::atoi(program->c_str());
+    }
     values = twProgramValues(pg);
-    for (const auto& p : kv) {
-        if (p.first == "name") { if (name) *name = p.second; continue; }
-        if (p.first == "program") continue;
-        const uint32_t id = twParamByKey(p.first.c_str());
+    for (const auto& [key, value] : tp.entries) {
+        if (key == "name") { if (name) *name = value; continue; }
+        if (key == "program") continue;
+        const uint32_t id = twParamByKey(key.c_str());
         if (id >= TW_PARAM_COUNT) continue;
-        char* end = nullptr;
-        const double d = std::strtod(p.second.c_str(), &end);
-        if (end != p.second.c_str()) values[id] = twClamp(id, d);
+        double d = 0.0;
+        if (ss::parseNumber(value, d)) values[id] = twClamp(id, d);
     }
     return true;
 }
 
 std::string presetToText(const TwValues& values, const std::string& name) {
-    std::string out = "# Tearwash preset v1\n";
-    out += "name=" + name + "\n";
-    out += std::string("program=") + programName(static_cast<int>(values[TW_PROGRAM])) + "\n";
-    char buf[96];
-    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) {
-        if (i == TW_PROGRAM) continue;
-        std::snprintf(buf, sizeof buf, "%s=%.10g\n", twParamInfo(i).key, values[i]);
-        out += buf;
-    }
-    return out;
+    spux::state::TextPreset tp;
+    tp.format = "Tearwash preset";
+    tp.version = 1;
+    tp.set("name", name);
+    tp.set("program", programName(static_cast<int>(values[TW_PROGRAM])));
+    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i)
+        if (i != TW_PROGRAM) tp.set(twParamInfo(i).key, spux::state::formatNumber(values[i], 10));
+    return spux::state::writeTextPreset(tp);
 }
 
 // ---- Library -----------------------------------------------------------------------------------

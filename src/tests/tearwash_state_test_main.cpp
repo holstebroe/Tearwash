@@ -192,6 +192,10 @@ int main(int argc, char** argv) {
         CHECK(a.p->presetName() == "My Lost Space" && a.p->program() == 3, "preset name and program");
         CHECK(a.p->paramValue(TW_DIFFUSION) == 0.123456789 && a.p->paramValue(TW_MIX) == 0.77 &&
               a.p->paramValue(TW_SHIMMERINT) == 0.6666666667, "preset values");
+        const std::vector<uint8_t> file = readFile("preset_user.twpreset");
+        TwValues v{};
+        for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) v[i] = a.p->paramValue(i);
+        CHECK(presetToText(v, "My Lost Space") == std::string(file.begin(), file.end()), "the preset writer writes the same file");
     }
 
     // Parameters: what the host saw before spux, line for line.

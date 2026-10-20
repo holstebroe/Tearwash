@@ -57,3 +57,6 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
   array), the CLAP tables come from `spux::clap::Plugin`, and the state is the spux container `TWR1` v1 (the
   text state `tearwash 1` still loads). New `tearwash_state_test` with states, a preset and the parameter info and
   value text saved by the previous version; audio output and the panel snapshot are bit-identical.
+- 2026-10-20 — `.twpreset` files are read and written with spux's text preset code (spux P4, as changed that day):
+  the same files byte for byte, now independent of the C locale. The state container is version 1 (Tearwash
+  is unreleased).

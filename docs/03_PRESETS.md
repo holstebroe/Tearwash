@@ -14,6 +14,8 @@ Tearwash's preset system, in the manner of Tannhäuser's (`docs/spec/05_PRESETS.
   lowdecay=0.8533871115
   ...
   ```
+- The file is spux's text preset format (`spux/state/TextPreset.hpp`): keys, never ids, and numbers
+  written and read without the C locale, so a file saved under a decimal-comma locale loads anywhere.
 - The program is stored by name, so presets survive list changes; loading starts from that
   program's stored settings (what selecting the program loads), then applies the listed values
   (clamped). Unknown keys are ignored.

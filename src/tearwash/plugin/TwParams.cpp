@@ -15,7 +15,7 @@ namespace {
 using namespace spux::params;
 
 constexpr ParamInfo kInfos[] = {
-#define SPUX_PARAM(...) SPUX_PARAM_INFO(__VA_ARGS__)
+#define SPUX_PARAM SPUX_PARAM_INFO
 #include "TwParams.def"
 #undef SPUX_PARAM
 };

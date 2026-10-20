@@ -10,8 +10,9 @@
 //   decay=0.6862745098
 //   ...
 //
-// The program is stored by name (it survives list changes); unknown keys are ignored, missing
-// keys keep the program's stored settings, values are clamped. Names start with a two-letter
+// It is spux's text preset format (spux/state/TextPreset.hpp): keys, not ids, and numbers written
+// and read without the C locale. The program is stored by name (it survives list changes); unknown
+// keys are ignored, missing keys keep the program's stored settings, values are clamped. Names start with a two-letter
 // category code (IN, PG, HL, RM, PL, SP, EC, FX), then the user folder.
 
 #include "TwParams.hpp"
