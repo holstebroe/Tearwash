@@ -1,0 +1,22 @@
+tearwash 1
+preset=PG VAST SPACE
+program=9
+decay=1
+lowdecay=0.78000000000000003
+crossover=0.29999999999999999
+damping=0.62
+distance=0.69999999999999996
+predelay=0.33333333333333331
+diffusion=0.59999999999999998
+modulation=0
+modrate=0.25
+rear=1
+size=0.5
+clarity=0.20000000000000001
+highcut=0.80000000000000004
+mix=0.34999999999999998
+ingain=-7.25
+outgain=-60
+moddepth=0.375
+shimmer=0.37
+shimmerint=1

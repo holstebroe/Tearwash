@@ -12,42 +12,28 @@ namespace tearwash {
 
 namespace {
 
-TwParamInfo g_info[TW_PARAM_COUNT] = {
-    { "program",    "Program",       "Program", 0, Reverb::kPrograms - 1, 0, TwKind::Choice },
-    { "decay",      "High Decay",    "Decay",   0, 1, 0, TwKind::Unit },
-    { "lowdecay",   "Low Decay",     "Decay",   0, 1, 0, TwKind::Unit },
-    { "crossover",  "Split Freq",    "Decay",   0, 1, 0, TwKind::Unit },
-    { "damping",    "Damp Cut",      "Decay",   0, 1, 0, TwKind::Unit },
-    { "distance",   "Distance",      "Space",   0, 1, 0, TwKind::Unit },
-    { "predelay",   "Predelay",      "Space",   0, 1, 0, TwKind::Unit },
-    { "diffusion",  "Diffusion",     "Space",   0, 1, 0, TwKind::Unit },
-    { "modulation", "Modulation",    "Motion",  0, 1, 1, TwKind::Toggle },
-    { "modrate",    "Mod Rate",      "Motion",  0, 1, 0, TwKind::Unit },
-    { "rear",       "Rear Outputs",  "Output",  0, 1, 0, TwKind::Toggle },
-    { "size",       "Size",          "Space",   0, 1, 0, TwKind::Unit },
-    { "clarity",    "Clarity",       "Space",   0, 1, 0, TwKind::Unit },
-    { "highcut",    "In Cut",        "Decay",   0, 1, 0, TwKind::Unit },
-    { "mix",        "Mix",           "Output",  0, 1, 0.35, TwKind::Percent },
-    { "ingain",     "Input Gain",    "Output",  -12, 12, 0, TwKind::Decibel },
-    { "outgain",    "Output Gain",   "Output",  kOutGainFloorDb, 12, 0, TwKind::Decibel },
-    { "moddepth",   "Mod Depth",     "Motion",  0, 1, 0.5, TwKind::Unit },
-    { "shimmer",    "Shimmer",       "Shimmer", 0, 1, 0, TwKind::Unit },
-    { "shimmerint", "Shimmer Interval", "Shimmer", 0, 1, 2.0 / 3.0, TwKind::Unit },   // +12 st
-};
+using namespace spux::params;
 
-// Defaults: the first program's stored settings.
-bool initDefaults() {
-    const Controls c = Reverb::programDefaults(0);
-    const struct { uint32_t id; double v; } map[] = {
-        { TW_DECAY, c.decay }, { TW_LOWDECAY, c.lowDecay }, { TW_CROSSOVER, c.crossover }, { TW_DAMPING, c.damping },
-        { TW_DISTANCE, c.distance }, { TW_PREDELAY, c.predelay }, { TW_DIFFUSION, c.diffusion }, { TW_MODRATE, c.modRate },
-        { TW_SIZE, c.size }, { TW_CLARITY, c.clarity }, { TW_HIGHCUT, c.highCut },
-    };
-    for (const auto& m : map) g_info[m.id].def = m.v;
-    g_info[TW_MODULATION].def = c.modulation ? 1.0 : 0.0;
-    g_info[TW_MODDEPTH].def = c.modDepth;
-    return true;
-}
+constexpr ParamInfo kInfos[] = {
+#define SPUX_PARAM SPUX_PARAM_INFO
+#include "TwParams.def"
+#undef SPUX_PARAM
+};
+constexpr ParamTable kTable{ kInfos };
+
+static_assert(kTable.valid());
+static_assert(kTable.size() == TW_PARAM_COUNT);
+// Ids are the enum and are dense from 0 (the plugin indexes by id); keys never change.
+constexpr bool keyIs(uint32_t id, const char* key) { return kTable.indexOf(id) == id && kTable.indexOfKey(key) == id; }
+static_assert(keyIs(TW_PROGRAM, "program") && keyIs(TW_DECAY, "decay") && keyIs(TW_LOWDECAY, "lowdecay") &&
+              keyIs(TW_CROSSOVER, "crossover") && keyIs(TW_DAMPING, "damping") && keyIs(TW_DISTANCE, "distance") &&
+              keyIs(TW_PREDELAY, "predelay") && keyIs(TW_DIFFUSION, "diffusion") && keyIs(TW_MODULATION, "modulation") &&
+              keyIs(TW_MODRATE, "modrate") && keyIs(TW_REAR, "rear") && keyIs(TW_SIZE, "size") &&
+              keyIs(TW_CLARITY, "clarity") && keyIs(TW_HIGHCUT, "highcut") && keyIs(TW_MIX, "mix") &&
+              keyIs(TW_INGAIN, "ingain") && keyIs(TW_OUTGAIN, "outgain") && keyIs(TW_MODDEPTH, "moddepth") &&
+              keyIs(TW_SHIMMER, "shimmer") && keyIs(TW_SHIMMERINT, "shimmerint"));
+static_assert(kInfos[TW_PROGRAM].max == Reverb::kPrograms - 1);
+static_assert(kInfos[TW_OUTGAIN].min == kOutGainFloorDb);
 
 bool is(const char* a, const char* b) {
     for (; *a && *b; ++a, ++b)
@@ -55,28 +41,27 @@ bool is(const char* a, const char* b) {
     return *a == *b;
 }
 
+// The 0…1 controls that go through an engine law (all linear floats but the mix, which is a percentage).
+bool isUnit(uint32_t id) { return kInfos[id].kind == ParamKind::Float && kInfos[id].law == ParamLaw::Linear && id != TW_MIX; }
+
 } // namespace
 
-const TwParamInfo& twParamInfo(uint32_t id) {
-    static const bool init = initDefaults();
-    (void)init;
-    return g_info[id < TW_PARAM_COUNT ? id : 0];
-}
+const ParamTable& twParams() { return kTable; }
+
+const TwParamInfo& twParamInfo(uint32_t id) { return kInfos[id < TW_PARAM_COUNT ? id : 0]; }
 
 uint32_t twParamByKey(const char* key) {
     if (!key) return TW_PARAM_COUNT;
-    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i)
-        if (std::strcmp(twParamInfo(i).key, key) == 0) return i;
-    return TW_PARAM_COUNT;
+    const size_t i = kTable.indexOfKey(key);
+    return i == kNoParam ? TW_PARAM_COUNT : static_cast<uint32_t>(i);
 }
 
+// spux's sanitizing, except that ±∞ goes to the end of the range (as Tearwash always did: "-inf dB" is the
+// output gain's floor); spux sends every non-finite value to the default.
 double twClamp(uint32_t id, double v) {
     const TwParamInfo& p = twParamInfo(id);
-    if (!(v == v)) v = p.def;
-    if (v < p.min) v = p.min;
-    if (v > p.max) v = p.max;
-    if (p.kind == TwKind::Choice || p.kind == TwKind::Toggle) v = std::floor(v + 0.5);
-    return v;
+    if (std::isinf(v)) v = v < 0 ? p.min : p.max;
+    return sanitizePlain(p, v);
 }
 
 int programCount() { return Reverb::kPrograms; }
@@ -88,9 +73,9 @@ void twValueText(uint32_t id, double v, char* buf, uint32_t cap) {
     const TwParamInfo& p = twParamInfo(id);
     v = twClamp(id, v);
     if (id == TW_PROGRAM) { std::snprintf(buf, cap, "%s", programName(static_cast<int>(v))); return; }
-    if (p.kind == TwKind::Toggle) { std::snprintf(buf, cap, "%s", v >= 0.5 ? "On" : "Off"); return; }
-    if (p.kind == TwKind::Percent) { std::snprintf(buf, cap, "%.0f %%", v * 100.0); return; }
-    if (p.kind == TwKind::Decibel) {
+    if (p.kind == ParamKind::Bool) { std::snprintf(buf, cap, "%s", v >= 0.5 ? "On" : "Off"); return; }
+    if (id == TW_MIX) { std::snprintf(buf, cap, "%.0f %%", v * 100.0); return; }
+    if (p.law == ParamLaw::Db) {
         if (id == TW_OUTGAIN && v <= kOutGainFloorDb) std::snprintf(buf, cap, "-inf dB");
         else std::snprintf(buf, cap, "%+.1f dB", v);
         return;
@@ -121,12 +106,12 @@ bool twTextToValue(uint32_t id, const char* text, double* out) {
         for (int i = 0; i < programCount(); ++i)
             if (is(text, programName(i))) { *out = i; return true; }
     }
-    if (p.kind == TwKind::Toggle) {
+    if (p.kind == ParamKind::Bool) {
         if (is(text, "on")) { *out = 1; return true; }
         if (is(text, "off")) { *out = 0; return true; }
     }
     char* end = nullptr;
-    if (p.kind == TwKind::Unit) {   // the inverse of the laws
+    if (isUnit(id)) {   // the inverse of the laws
         if (id == TW_DECAY && is(text, "hold")) { *out = 1.0; return true; }
         if ((id == TW_DAMPING || id == TW_HIGHCUT) && is(text, "open")) { *out = 1.0; return true; }
         const char* t = text[0] == 'x' ? text + 1 : text;
@@ -149,7 +134,7 @@ bool twTextToValue(uint32_t id, const char* text, double* out) {
     }
     const double d = std::strtod(text, &end);
     if (end == text) return false;
-    if (p.kind == TwKind::Percent) *out = twClamp(id, d / 100.0);
+    if (id == TW_MIX) *out = twClamp(id, d / 100.0);
     else *out = twClamp(id, d);
     return true;
 }

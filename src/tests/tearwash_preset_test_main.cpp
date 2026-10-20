@@ -186,9 +186,9 @@ int main(int argc, char** argv) {
         CHECK(u >= 0 && p.presetLibrary().presets()[static_cast<size_t>(u)].user, "rescan finds the user preset");
         p.loadPreset(0);
         CHECK(p.loadPresetFile(tmp + "/My Space.twpreset") && std::fabs(p.paramValue(TW_MIX) - 0.77) < 1e-9, "load preset file");
-        const std::string st = p.stateText();
+        const std::vector<uint8_t> st = p.stateBytes();
         p.loadPreset(0);
-        CHECK(p.loadStateText(st) && p.presetName() == "My Space" && !p.presetModified(), "state keeps the preset");
+        CHECK(p.loadState(st) && p.presetName() == "My Space" && !p.presetModified(), "state keeps the preset");
     }
     // The panel: preset bar and menu.
     {

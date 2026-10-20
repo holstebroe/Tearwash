@@ -1,0 +1,22 @@
+# Tearwash preset v1
+name=My Lost Space
+program=ROOM
+decay=0.28
+lowdecay=0.3
+crossover=0.35
+damping=0.75
+distance=0.25
+predelay=0.04
+diffusion=0.123456789
+modulation=1
+modrate=0.3
+rear=0
+size=0.5
+clarity=0.15
+highcut=0.9
+mix=0.77
+ingain=0
+outgain=0
+moddepth=0.4
+shimmer=0
+shimmerint=0.6666666667

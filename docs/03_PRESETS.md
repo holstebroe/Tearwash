@@ -14,12 +14,19 @@ Tearwash's preset system, in the manner of Tannhäuser's (`docs/spec/05_PRESETS.
   lowdecay=0.8533871115
   ...
   ```
+- The file is spux's text preset format (`spux/state/TextPreset.hpp`): keys, never ids, and numbers
+  written and read without the C locale, so a file saved under a decimal-comma locale loads anywhere.
 - The program is stored by name, so presets survive list changes; loading starts from that
   program's stored settings (what selecting the program loads), then applies the listed values
   (clamped). Unknown keys are ignored.
 - Loading a preset sets every parameter and sends each change to the host as a gesture. The
-  plugin state records the preset's name (`preset=` line), so the modified marker survives a
-  session.
+  plugin state records the preset's name, so the modified marker survives a session.
+- **State** (the host's project data, `TwState.hpp`): spux's chunk container with the magic `TWR1`,
+  version 1: chunk `PARM` (id and plain value per parameter, float64) and `PRST` (the preset name).
+  Unknown chunks and ids are skipped, missing parameters keep their defaults, values are clamped.
+  The text state from before the container (`tearwash 1`, a `preset=` line, then `key=value` lines)
+  still loads and is saved again as the container. Tearwash was unreleased then, so the container is
+  version 1; each later version adds a migration step (`TwState.cpp`).
 
 ## 2. Library and categories
 

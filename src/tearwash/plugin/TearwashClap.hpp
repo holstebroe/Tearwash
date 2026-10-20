@@ -2,7 +2,10 @@
 #define TEARWASH_CLAP_HPP
 
 // Tearwash CLAP plugin (docs/01_ARCHITECTURE.md): stereo audio effect around
-// tearwash::Reverb. Parameters from TwParams, text state, host gestures for GUI edits.
+// tearwash::Reverb, on spux's CLAP glue (spux_clap: the extensions below are offered because this class
+// has their methods). Parameters from TwParams in a spux ParamStore, state in a spux chunk container
+// (TwState.hpp; the text state of earlier versions still loads), host gestures for GUI edits through a
+// spux EditQueue.
 //
 // Threads: the engine allocates its delay lines in activate() for every program and setting, so
 // program and control changes are applied on the audio thread without allocating. A host program
@@ -12,6 +15,10 @@
 #include "TwParams.hpp"
 #include "TwPresets.hpp"
 #include "tearwash/engine/Reverb.hpp"
+
+#include "spux/clap/ClapPlugin.hpp"
+#include "spux/params/EditQueue.hpp"
+#include "spux/params/ParamStore.hpp"
 
 #include <array>
 #include <atomic>
@@ -24,29 +31,31 @@ namespace tearwash {
 
 class TwGui;
 
-class TearwashClap {
+class TearwashClap : public spux::clap::Plugin<TearwashClap> {
 public:
     explicit TearwashClap(const clap_host_t* host);
     ~TearwashClap();
 
-    const clap_plugin_t* getClapPlugin() const { return &clapPlugin_; }
+    static const clap_plugin_descriptor_t& descriptor();
+    const clap_plugin_t* getClapPlugin() const { return clapPlugin(); }
 
-    bool init() { return true; }
     void destroy();
     bool activate(double sampleRate, uint32_t minFrames, uint32_t maxFrames);
     void deactivate() { active_ = false; }
-    bool startProcessing() { return true; }
-    void stopProcessing() {}
     void reset();
     clap_process_status process(const clap_process_t* process);
-    const void* getExtension(const char* id);
+    const void* getExtension(const char* id);   // preset-load, then spux's defaults
     void onMainThread();
+
+    // Audio ports: one stereo input, one stereo output.
+    uint32_t audioPortsCount(bool) const { return 1; }
+    bool audioPortsGet(uint32_t index, bool isInput, clap_audio_port_info_t* info) const;
 
     // Params.
     uint32_t paramsCount() const { return TW_PARAM_COUNT; }
     bool paramsInfo(uint32_t index, clap_param_info_t* info) const;
     bool paramsValue(clap_id id, double* out) const;
-    double paramValue(clap_id id) const { return id < TW_PARAM_COUNT ? values_[id].load(std::memory_order_relaxed) : 0.0; }
+    double paramValue(clap_id id) const { return id < TW_PARAM_COUNT ? params_.plain(id) : 0.0; }
     bool paramsValueToText(clap_id id, double value, char* buf, uint32_t cap) const;
     bool paramsTextToValue(clap_id id, const char* text, double* out) const;
     void paramsFlush(const clap_input_events_t* in, const clap_output_events_t* out);
@@ -74,22 +83,27 @@ public:
     bool presetModified() const;
     int presetIndex() const;
 
-    // State.
+    // State: the container of TwState.hpp; loadState also reads the text state of earlier versions.
     bool stateSave(const clap_ostream_t* stream);
     bool stateLoad(const clap_istream_t* stream);
-    std::string stateText() const;
-    bool loadStateText(const std::string& text);
+    std::vector<uint8_t> stateBytes() const;
+    bool loadState(const std::vector<uint8_t>& bytes);
 
-    const clap_host_t* host() const { return host_; }
+    // GUI (the CLAP gui extension through spux_clap; the platform's embedded window API, fixed size).
+    bool guiCreate(const char* api, bool floating);
+    void guiDestroy() { destroyGuiWindow(); }
+    bool guiSetParent(const clap_window_t* window);
+    bool guiGetSize(uint32_t* width, uint32_t* height) const;
+    bool guiSetSize(uint32_t width, uint32_t height);
+    bool guiShow();
+    bool guiHide();
     TwGui* getGuiWindow() { return gui_.get(); }
     void createGuiWindow();
     void destroyGuiWindow();
 
 private:
-    const clap_host_t* host_ = nullptr;
-    clap_plugin_t clapPlugin_{};
     std::unique_ptr<TwGui> gui_;
-    std::atomic<double> values_[TW_PARAM_COUNT];
+    spux::params::ParamStore<TW_PARAM_COUNT> params_{ twParams() };
     TwPresetLibrary presets_;
     mutable std::mutex presetMutex_;
     std::string presetName_ = "IN Init";
@@ -119,18 +133,16 @@ private:
     std::atomic<bool> rescanValues_{ false };
     void markDirty();
 
-    // Outgoing param events (GUI thread → host).
-    struct OutEvent { uint16_t type; clap_id paramId; double value; uint32_t flags; };
-    static constexpr size_t kOutCapacity = 512;
-    std::mutex outMutex_;
-    std::array<OutEvent, kOutCapacity> outQueue_{};
-    size_t outCount_ = 0;
-    std::array<OutEvent, kOutCapacity> drain_{};
-    void queueOut(const OutEvent& ev);
-    void pushOut(const clap_output_events_t* out);
-    void requestFlush();
+    // Outgoing param events (GUI and main thread → host): a spux EditQueue, drained by process and
+    // flush. The GUI's event thread and the main thread both push, so pushes take queueMutex_; the
+    // audio thread only pops and never waits.
+    spux::params::EditQueue edits_;
+    std::mutex queueMutex_;
+    void queueChange(clap_id id);   // begin, value, end, or nothing when they do not fit
+    std::array<bool, TW_PARAM_COUNT> gestureOpen_{};   // queueMutex_
+    void requestFlush() { requestParamsFlush(); }
 
-    void setValue(clap_id id, double v) { values_[id].store(twClamp(id, v), std::memory_order_relaxed); }
+    void setValue(clap_id id, double v) { params_.setPlain(id, v); }
     void handleEvent(const clap_event_header_t* hdr);
     void checkProgramChange();
 };

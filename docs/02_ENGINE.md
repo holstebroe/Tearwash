@@ -92,7 +92,8 @@ Control value v = 0…1 as the plugin stores it.
 
 ## 5. Plugin parameters
 
-Stable ids, append only (`src/tearwash/plugin/TwParams.cpp`). The panel and the host show the
+Stable ids, append only (`src/tearwash/plugin/TwParams.def`, spux_params columns; host values are the
+plain values below, the gains in dB through `PF_HOST_PLAIN`). The panel and the host show the
 units above; text entry accepts them ("3.5", "Hold", "Open", "x1.5", "+12 st"). Host names are
 those of the panel's labels, except where the key says otherwise (`decay` is HIGH DECAY,
 `crossover` SPLIT FREQ, `damping` DAMP CUT, `highcut` IN CUT). The panel hides `modulation`,
@@ -135,6 +136,9 @@ controls (18, 19) stay.
   faders, wheel, toggles and program buttons; idle frames do not redraw; state round trip;
   parameter text.
 - `tearwash_preset_test`: 03 §6.
+- `tearwash_state_test`: states, a user preset and the parameter info and value text saved by
+  Tearwash before spux (`src/tests/data/`) load and read the same; the container round trip and its
+  byte image; unknown and damaged chunks; the defaults equal GRAND HALL's stored settings.
 - `tearwash_dsp_test`, shimmer (§7): off is bit-identical to the plain reverb; +12, +7 and −12 put at least
   15 dB more energy at the shifted frequency than the unshifted reverb; decay 60 s with amount 1 stays
   finite and bounded (peak < 8) for 60 s of tail, for every interval of the set on GRAND HALL, PLATE

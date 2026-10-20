@@ -1,5 +1,7 @@
 #include "TearwashClap.hpp"
 #include "TwGui.hpp"
+#include "TwState.hpp"
+#include "spux/clap/ClapHelpers.hpp"
 #include <clap/ext/preset-load.h>
 #include <clap/factory/preset-discovery.h>
 #include <clap/ext/state.h>
@@ -17,16 +19,6 @@
 
 namespace tearwash {
 
-// A C++ exception must never cross into the host.
-template <class R, class F>
-static R guarded(R fallback, F&& f) noexcept {
-    try { return f(); } catch (...) { return fallback; }
-}
-template <class F>
-static void guardedVoid(F&& f) noexcept {
-    try { f(); } catch (...) {}
-}
-
 #ifdef TEARWASH_HAVE_SSE
 struct ScopedFlushDenormals {
     unsigned saved = _mm_getcsr();
@@ -37,68 +29,8 @@ struct ScopedFlushDenormals {
 struct ScopedFlushDenormals {};
 #endif
 
-static TearwashClap* self(const clap_plugin_t* p) { return static_cast<TearwashClap*>(p->plugin_data); }
-
-static const clap_plugin_audio_ports_t g_audioPorts = {
-    [](const clap_plugin_t*, bool) -> uint32_t { return 1; },
-    [](const clap_plugin_t*, uint32_t index, bool isInput, clap_audio_port_info_t* info) -> bool {
-        if (index != 0 || !info) return false;
-        info->id = 0;
-        std::snprintf(info->name, sizeof(info->name), "%s", isInput ? "Input" : "Output");
-        info->channel_count = 2;
-        info->flags = CLAP_AUDIO_PORT_IS_MAIN;
-        info->port_type = CLAP_PORT_STEREO;
-        info->in_place_pair = CLAP_INVALID_ID;
-        return true;
-    }
-};
-
-static const clap_plugin_params_t g_params = {
-    [](const clap_plugin_t* p) -> uint32_t { return guarded<uint32_t>(0, [&] { return self(p)->paramsCount(); }); },
-    [](const clap_plugin_t* p, uint32_t i, clap_param_info_t* info) -> bool {
-        return guarded(false, [&] { return self(p)->paramsInfo(i, info); });
-    },
-    [](const clap_plugin_t* p, clap_id id, double* v) -> bool {
-        return guarded(false, [&] { return self(p)->paramsValue(id, v); });
-    },
-    [](const clap_plugin_t* p, clap_id id, double v, char* buf, uint32_t cap) -> bool {
-        return guarded(false, [&] { return self(p)->paramsValueToText(id, v, buf, cap); });
-    },
-    [](const clap_plugin_t* p, clap_id id, const char* text, double* v) -> bool {
-        return guarded(false, [&] { return self(p)->paramsTextToValue(id, text, v); });
-    },
-    [](const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t* out) {
-        guardedVoid([&] { ScopedFlushDenormals ftz; self(p)->paramsFlush(in, out); });
-    }
-};
-
-static const clap_plugin_state_t g_state = {
-    [](const clap_plugin_t* p, const clap_ostream_t* s) -> bool { return guarded(false, [&] { return self(p)->stateSave(s); }); },
-    [](const clap_plugin_t* p, const clap_istream_t* s) -> bool { return guarded(false, [&] { return self(p)->stateLoad(s); }); },
-};
-
-TearwashClap::TearwashClap(const clap_host_t* host) : host_(host) {
-    clapPlugin_.desc = nullptr;
-    clapPlugin_.plugin_data = this;
-    clapPlugin_.init = [](const clap_plugin_t* p) -> bool { return guarded(false, [&] { return self(p)->init(); }); };
-    clapPlugin_.destroy = [](const clap_plugin_t* p) { guardedVoid([&] { self(p)->destroy(); }); };
-    clapPlugin_.activate = [](const clap_plugin_t* p, double sr, uint32_t mn, uint32_t mx) -> bool {
-        return guarded(false, [&] { return self(p)->activate(sr, mn, mx); });
-    };
-    clapPlugin_.deactivate = [](const clap_plugin_t* p) { guardedVoid([&] { self(p)->deactivate(); }); };
-    clapPlugin_.start_processing = [](const clap_plugin_t* p) -> bool { return guarded(false, [&] { return self(p)->startProcessing(); }); };
-    clapPlugin_.stop_processing = [](const clap_plugin_t* p) { guardedVoid([&] { self(p)->stopProcessing(); }); };
-    clapPlugin_.reset = [](const clap_plugin_t* p) { guardedVoid([&] { self(p)->reset(); }); };
-    clapPlugin_.process = [](const clap_plugin_t* p, const clap_process_t* pr) -> clap_process_status {
-        return guarded<clap_process_status>(CLAP_PROCESS_CONTINUE, [&] { return self(p)->process(pr); });
-    };
-    clapPlugin_.get_extension = [](const clap_plugin_t* p, const char* id) -> const void* {
-        return guarded<const void*>(nullptr, [&] { return self(p)->getExtension(id); });
-    };
-    clapPlugin_.on_main_thread = [](const clap_plugin_t* p) { guardedVoid([&] { self(p)->onMainThread(); }); };
-
-    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) values_[i].store(twParamInfo(i).def);
-    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) presetValues_[i] = values_[i].load();
+TearwashClap::TearwashClap(const clap_host_t* host) : Plugin(&descriptor(), host) {
+    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) presetValues_[i] = paramValue(i);   // the store starts at the defaults
     targetProgram_.store(program());   // the defaults are the first program's settings
 }
 
@@ -151,11 +83,7 @@ void TearwashClap::selectProgram(int pg) {
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) old[i] = paramValue(i);
     loadProgramSettings(pg);
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) {
-        const double v = paramValue(i);
-        if (v == old[i]) continue;
-        queueOut({ CLAP_EVENT_PARAM_GESTURE_BEGIN, i, 0.0, CLAP_EVENT_IS_LIVE });
-        queueOut({ CLAP_EVENT_PARAM_VALUE, i, v, CLAP_EVENT_IS_LIVE });
-        queueOut({ CLAP_EVENT_PARAM_GESTURE_END, i, 0.0, CLAP_EVENT_IS_LIVE });
+        if (paramValue(i) != old[i]) queueChange(i);
     }
     requestFlush();
     markDirty();
@@ -172,7 +100,7 @@ void TearwashClap::checkProgramChange() {
     if (pg == targetProgram_.load() || pg == askedProgram_) return;
     askedProgram_ = pg;
     programRequest_.store(true);
-    if (host_ && host_->request_callback) host_->request_callback(host_);
+    requestCallback();
 }
 
 // Audio thread: control changes of the running program.
@@ -208,7 +136,7 @@ void TearwashClap::reset() {
 
 void TearwashClap::markDirty() {
     stateDirty_.store(true);
-    if (host_ && host_->request_callback) host_->request_callback(host_);
+    requestCallback();
 }
 
 void TearwashClap::onMainThread() {
@@ -216,23 +144,15 @@ void TearwashClap::onMainThread() {
         loadProgramSettings(program());
         rescanValues_.store(true);
     }
-    if (rescanValues_.exchange(false) && host_) {
-        const auto* hp = static_cast<const clap_host_params_t*>(host_->get_extension(host_, CLAP_EXT_PARAMS));
-        if (hp && hp->rescan) hp->rescan(host_, CLAP_PARAM_RESCAN_VALUES | CLAP_PARAM_RESCAN_TEXT);
-    }
-    if (stateDirty_.exchange(false) && host_) {
-        const auto* hs = static_cast<const clap_host_state_t*>(host_->get_extension(host_, CLAP_EXT_STATE));
-        if (hs && hs->mark_dirty) hs->mark_dirty(host_);
-    }
+    if (rescanValues_.exchange(false)) rescanParams(CLAP_PARAM_RESCAN_VALUES | CLAP_PARAM_RESCAN_TEXT);
+    if (stateDirty_.exchange(false)) markStateDirty();
 }
 
 // --- Processing ----------------------------------------------------------------------------------
 
 void TearwashClap::handleEvent(const clap_event_header_t* hdr) {
-    if (!hdr || hdr->size < sizeof(clap_event_header_t) || hdr->space_id != CLAP_CORE_EVENT_SPACE_ID) return;
-    if (hdr->type != CLAP_EVENT_PARAM_VALUE || hdr->size < sizeof(clap_event_param_value_t)) return;
-    const auto* ev = reinterpret_cast<const clap_event_param_value_t*>(hdr);
-    if (ev->param_id < TW_PARAM_COUNT) setValue(ev->param_id, ev->value);
+    const auto* ev = spux::clap::asParamValue(hdr);
+    if (ev && ev->param_id < TW_PARAM_COUNT) setValue(ev->param_id, ev->value);
 }
 
 void TearwashClap::render(const float* inL, const float* inR, float* outL, float* outR, uint32_t n) {
@@ -272,7 +192,6 @@ void TearwashClap::render(const float* inL, const float* inR, float* outL, float
 }
 
 clap_process_status TearwashClap::process(const clap_process_t* process) {
-    if (!process) return CLAP_PROCESS_CONTINUE;
     ScopedFlushDenormals ftz;
 
     const uint32_t frames = process->frames_count;
@@ -317,7 +236,7 @@ clap_process_status TearwashClap::process(const clap_process_t* process) {
         }
     }
     while (ei < numEvents) handleEvent(process->in_events->get(process->in_events, ei++));
-    pushOut(process->out_events);
+    spux::clap::drainEdits(edits_, twParams(), process->out_events);
     return CLAP_PROCESS_CONTINUE;
 }
 
@@ -328,7 +247,7 @@ static bool presetLoadFromLocation(const clap_plugin_t* p, uint32_t kind, const 
     if (kind == CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN && key) ok = self->loadPreset(self->presetLibrary().indexOf(key));
     else if (kind == CLAP_PRESET_DISCOVERY_LOCATION_FILE && location) ok = self->loadPresetFile(location);
     const clap_host_t* h = self->host();
-    if (h) {
+    if (h && h->get_extension) {
         const auto* hp = static_cast<const clap_host_preset_load_t*>(h->get_extension(h, CLAP_EXT_PRESET_LOAD));
         if (hp && ok && hp->loaded) hp->loaded(h, kind, location, key);
         if (hp && !ok && hp->on_error) hp->on_error(h, kind, location, key, 0, "preset not found");
@@ -337,37 +256,35 @@ static bool presetLoadFromLocation(const clap_plugin_t* p, uint32_t kind, const 
 }
 static const clap_plugin_preset_load_t g_presetLoad = { presetLoadFromLocation };
 
+// Preset-load is Tearwash's own; params, state, audio ports and the GUI come from spux_clap, which
+// offers them because this class implements their methods.
 const void* TearwashClap::getExtension(const char* id) {
-    if (!id) return nullptr;
     if (std::strcmp(id, CLAP_EXT_PRESET_LOAD) == 0 || std::strcmp(id, CLAP_EXT_PRESET_LOAD_COMPAT) == 0) return &g_presetLoad;
-    if (std::strcmp(id, CLAP_EXT_AUDIO_PORTS) == 0) return &g_audioPorts;
-    if (std::strcmp(id, CLAP_EXT_PARAMS) == 0) return &g_params;
-    if (std::strcmp(id, CLAP_EXT_STATE) == 0) return &g_state;
-    if (std::strcmp(id, CLAP_EXT_GUI) == 0) return &g_tearwashGuiExtension;
-    return nullptr;
+    return defaultExtension(id);
+}
+
+bool TearwashClap::audioPortsGet(uint32_t index, bool isInput, clap_audio_port_info_t* info) const {
+    if (index != 0) return false;
+    info->id = 0;
+    std::snprintf(info->name, sizeof(info->name), "%s", isInput ? "Input" : "Output");
+    info->channel_count = 2;
+    info->flags = CLAP_AUDIO_PORT_IS_MAIN;
+    info->port_type = CLAP_PORT_STEREO;
+    info->in_place_pair = CLAP_INVALID_ID;
+    return true;
 }
 
 // --- Params --------------------------------------------------------------------------------------
 
 bool TearwashClap::paramsInfo(uint32_t index, clap_param_info_t* info) const {
     if (index >= TW_PARAM_COUNT || !info) return false;
-    std::memset(info, 0, sizeof(*info));
-    const TwParamInfo& p = twParamInfo(index);
-    info->id = index;
-    info->flags = CLAP_PARAM_IS_AUTOMATABLE;
-    if (p.kind == TwKind::Choice || p.kind == TwKind::Toggle) info->flags |= CLAP_PARAM_IS_STEPPED;
-    if (p.kind == TwKind::Choice) info->flags |= CLAP_PARAM_IS_ENUM;
-    std::snprintf(info->name, sizeof(info->name), "%s", p.name);
-    std::snprintf(info->module, sizeof(info->module), "%s", p.module);
-    info->min_value = p.min;
-    info->max_value = p.max;
-    info->default_value = p.def;
+    spux::clap::fillParamInfo(twParams()[index], *info);
     return true;
 }
 
 bool TearwashClap::paramsValue(clap_id id, double* out) const {
     if (id >= TW_PARAM_COUNT || !out) return false;
-    *out = values_[id].load(std::memory_order_relaxed);
+    *out = params_.host(id);
     return true;
 }
 
@@ -382,64 +299,34 @@ bool TearwashClap::paramsTextToValue(clap_id id, const char* text, double* out) 
 }
 
 void TearwashClap::paramsFlush(const clap_input_events_t* in, const clap_output_events_t* out) {
+    ScopedFlushDenormals ftz;
     if (in && in->size && in->get) {
         const uint32_t n = in->size(in);
         for (uint32_t i = 0; i < n; ++i) handleEvent(in->get(in, i));
     }
     // Not processing: changes reach the engine at the next process call.
     if (active_) checkProgramChange();
-    pushOut(out);
+    spux::clap::drainEdits(edits_, twParams(), out);
 }
 
-void TearwashClap::requestFlush() {
-    if (!host_) return;
-    const auto* hp = static_cast<const clap_host_params_t*>(host_->get_extension(host_, CLAP_EXT_PARAMS));
-    if (hp && hp->request_flush) hp->request_flush(host_);
-    else if (host_->request_process) host_->request_process(host_);
+// Main or GUI thread. A change from a program or preset load: the whole gesture or nothing, so the host
+// never sees an unbalanced one; it leaves the queue's gesture reserve to the GUI's drags.
+void TearwashClap::queueChange(clap_id id) {
+    std::lock_guard<std::mutex> lock(queueMutex_);
+    if (edits_.freeSlots() < 3 + spux::params::EditQueue::kGestureReserve) return;
+    edits_.tryPush({ spux::params::ParamEdit::Kind::Begin, id, 0.0 });
+    edits_.tryPush({ spux::params::ParamEdit::Kind::Value, id, params_.host(id) });
+    edits_.tryPush({ spux::params::ParamEdit::Kind::End, id, 0.0 });
 }
 
-void TearwashClap::queueOut(const OutEvent& ev) {
-    std::lock_guard<std::mutex> lock(outMutex_);
-    if (outCount_ < kOutCapacity) outQueue_[outCount_++] = ev;
-}
-
-void TearwashClap::pushOut(const clap_output_events_t* out) {
-    if (!out || !out->try_push) return;
-    size_t count = 0;
-    {
-        std::unique_lock<std::mutex> lock(outMutex_, std::try_to_lock);
-        if (!lock.owns_lock()) return;
-        count = outCount_;
-        std::copy(outQueue_.begin(), outQueue_.begin() + static_cast<long>(count), drain_.begin());
-        outCount_ = 0;
-    }
-    for (size_t i = 0; i < count; ++i) {
-        const OutEvent& ev = drain_[i];
-        if (ev.type == CLAP_EVENT_PARAM_VALUE) {
-            clap_event_param_value_t e{};
-            e.header.size = sizeof(e);
-            e.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
-            e.header.type = CLAP_EVENT_PARAM_VALUE;
-            e.header.flags = ev.flags;
-            e.param_id = ev.paramId;
-            e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1;
-            e.value = ev.value;
-            out->try_push(out, &e.header);
-        } else {
-            clap_event_param_gesture_t e{};
-            e.header.size = sizeof(e);
-            e.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
-            e.header.type = ev.type;
-            e.header.flags = ev.flags;
-            e.param_id = ev.paramId;
-            out->try_push(out, &e.header);
-        }
-    }
-}
-
+// GUI drags: a begin keeps a slot for its end, values leave the gesture reserve free (spux EditQueue);
+// a begin that did not fit drops its end too. A dropped value is harmless: the store has it.
 void TearwashClap::onBeginEditFromGui(clap_id id) {
     if (id >= TW_PARAM_COUNT) return;
-    queueOut({ CLAP_EVENT_PARAM_GESTURE_BEGIN, id, 0.0, CLAP_EVENT_IS_LIVE });
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        gestureOpen_[id] = edits_.pushBegin(id);
+    }
     requestFlush();
 }
 
@@ -450,14 +337,22 @@ void TearwashClap::onParamValueFromGui(clap_id id, double value) {
         return;
     }
     setValue(id, value);
-    queueOut({ CLAP_EVENT_PARAM_VALUE, id, values_[id].load(), CLAP_EVENT_IS_LIVE });
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        edits_.pushValue(id, params_.host(id));
+    }
     requestFlush();
     markDirty();
 }
 
 void TearwashClap::onEndEditFromGui(clap_id id) {
     if (id >= TW_PARAM_COUNT) return;
-    queueOut({ CLAP_EVENT_PARAM_GESTURE_END, id, 0.0, CLAP_EVENT_IS_LIVE });
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        if (!gestureOpen_[id]) return;   // its begin was dropped
+        gestureOpen_[id] = false;
+        edits_.pushEnd(id);              // fits: values leave the gesture reserve free
+    }
     requestFlush();
 }
 
@@ -476,11 +371,7 @@ bool TearwashClap::loadPresetValues(const TwValues& values, const std::string& n
         for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) presetValues_[i] = paramValue(i);
     }
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) {
-        const double v = paramValue(i);
-        if (v == old[i]) continue;
-        queueOut({ CLAP_EVENT_PARAM_GESTURE_BEGIN, i, 0.0, CLAP_EVENT_IS_LIVE });
-        queueOut({ CLAP_EVENT_PARAM_VALUE, i, v, CLAP_EVENT_IS_LIVE });
-        queueOut({ CLAP_EVENT_PARAM_GESTURE_END, i, 0.0, CLAP_EVENT_IS_LIVE });
+        if (paramValue(i) != old[i]) queueChange(i);
     }
     requestFlush();
     markDirty();
@@ -545,68 +436,56 @@ int TearwashClap::presetIndex() const { return presets_.indexOf(presetName()); }
 
 // --- State ---------------------------------------------------------------------------------------
 
-std::string TearwashClap::stateText() const {
-    std::string out = "tearwash 1\n";
-    out += "preset=" + presetName() + "\n";
-    char buf[96];
-    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) {
-        std::snprintf(buf, sizeof(buf), "%s=%.17g\n", twParamInfo(i).key, paramValue(i));
-        out += buf;
-    }
-    return out;
+std::vector<uint8_t> TearwashClap::stateBytes() const {
+    TwValues v;
+    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) v[i] = paramValue(i);
+    return serializeState(v, presetName());
 }
 
-bool TearwashClap::loadStateText(const std::string& text) {
-    std::istringstream in(text);
-    std::string line;
-    if (!std::getline(in, line) || line.compare(0, 9, "tearwash ") != 0) return false;
-    double v[TW_PARAM_COUNT];
-    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) v[i] = twParamInfo(i).def;
-    std::string preset;
-    while (std::getline(in, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        const size_t eq = line.find('=');
-        if (eq == std::string::npos) continue;
-        if (line.compare(0, eq, "preset") == 0) { preset = line.substr(eq + 1); continue; }
-        const uint32_t id = twParamByKey(line.substr(0, eq).c_str());
-        if (id < TW_PARAM_COUNT) v[id] = std::strtod(line.c_str() + eq + 1, nullptr);
-    }
-    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) setValue(i, v[i]);
+bool TearwashClap::loadState(const std::vector<uint8_t>& bytes) {
+    TwState st;
+    if (!parseState(bytes, st)) return false;
+    for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) setValue(i, st.values[i]);
     targetProgram_.store(program());
     // The preset the state came from: its stored values (so the modified marker is right), or the
     // state itself when the preset is not in the library.
     std::lock_guard<std::mutex> lock(presetMutex_);
-    presetName_ = preset.empty() ? std::string("IN Init") : preset;
+    presetName_ = st.preset.empty() ? std::string("IN Init") : st.preset;
     const int idx = presets_.indexOf(presetName_);
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i)
         presetValues_[i] = idx >= 0 ? presets_.presets()[static_cast<size_t>(idx)].values[i] : paramValue(i);
     return true;
 }
 
-bool TearwashClap::stateSave(const clap_ostream_t* stream) {
-    if (!stream || !stream->write) return false;
-    const std::string s = stateText();
-    size_t done = 0;
-    while (done < s.size()) {
-        const int64_t n = stream->write(stream, s.data() + done, s.size() - done);
-        if (n <= 0) return false;
-        done += static_cast<size_t>(n);
-    }
+bool TearwashClap::stateSave(const clap_ostream_t* stream) { return spux::clap::writeAll(stream, stateBytes()); }
+
+bool TearwashClap::stateLoad(const clap_istream_t* stream) {
+    std::vector<uint8_t> data;
+    return spux::clap::readAll(stream, data, 1u << 20) && loadState(data);
+}
+
+// --- GUI -----------------------------------------------------------------------------------------
+
+bool TearwashClap::guiCreate(const char*, bool) {
+    createGuiWindow();
     return true;
 }
 
-bool TearwashClap::stateLoad(const clap_istream_t* stream) {
-    if (!stream || !stream->read) return false;
-    std::string data;
-    char chunk[4096];
-    while (data.size() < (1u << 16)) {
-        const int64_t n = stream->read(stream, chunk, sizeof(chunk));
-        if (n < 0) return false;
-        if (n == 0) break;
-        data.append(chunk, static_cast<size_t>(std::min<int64_t>(n, sizeof(chunk))));
-    }
-    return loadStateText(data);
+bool TearwashClap::guiSetParent(const clap_window_t* window) {
+    if (!window->api) return false;
+    if (!gui_) createGuiWindow();
+    return gui_->setParent(window);
 }
+
+bool TearwashClap::guiGetSize(uint32_t* width, uint32_t* height) const {
+    *width = TwGui::kWidth;
+    *height = TwGui::kHeight;
+    return true;
+}
+
+bool TearwashClap::guiSetSize(uint32_t width, uint32_t height) { return gui_ ? gui_->setSize(width, height) : true; }
+bool TearwashClap::guiShow() { return gui_ ? gui_->show() : false; }
+bool TearwashClap::guiHide() { return gui_ ? gui_->hide() : false; }
 
 // --- Entry ---------------------------------------------------------------------------------------
 
@@ -626,22 +505,9 @@ static const clap_plugin_descriptor_t g_descriptor = {
     g_features,
 };
 
-static uint32_t factoryCount(const clap_plugin_factory_t*) { return 1; }
-static const clap_plugin_descriptor_t* factoryDescriptor(const clap_plugin_factory_t*, uint32_t i) {
-    return i == 0 ? &g_descriptor : nullptr;
-}
-static const clap_plugin_t* factoryCreate(const clap_plugin_factory_t*, const clap_host_t* host, const char* id) {
-    if (!host || !id || !clap_version_is_compatible(host->clap_version)) return nullptr;
-    if (std::strcmp(id, g_descriptor.id) != 0) return nullptr;
-    try {
-        auto* p = new TearwashClap(host);
-        return p->getClapPlugin();
-    } catch (...) {
-        return nullptr;
-    }
-}
+const clap_plugin_descriptor_t& TearwashClap::descriptor() { return g_descriptor; }
 
-static const clap_plugin_factory_t g_factory = { factoryCount, factoryDescriptor, factoryCreate };
+
 
 // --- Preset discovery: the built-in library as plugin presets, the user folder as files.
 
@@ -731,7 +597,7 @@ static bool entryInit(const char*) { return true; }
 static void entryDeinit() {}
 static const void* entryGetFactory(const char* id) {
     if (!id) return nullptr;
-    if (std::strcmp(id, CLAP_PLUGIN_FACTORY_ID) == 0) return &g_factory;
+    if (std::strcmp(id, CLAP_PLUGIN_FACTORY_ID) == 0) return &spux::clap::SingleFactory<TearwashClap>::factory;
     if (std::strcmp(id, CLAP_PRESET_DISCOVERY_FACTORY_ID) == 0 || std::strcmp(id, CLAP_PRESET_DISCOVERY_FACTORY_ID_COMPAT) == 0)
         return &g_discovery;
     return nullptr;

@@ -625,7 +625,10 @@ void TwGui::handleWheel(int x, int y, int delta) {
     if (c.kind != Kind::Fader && c.kind != Kind::Knob) return;
     const TwParamInfo& p = twParamInfo(static_cast<uint32_t>(c.param));
     // 0.5 % per notch; level knobs 0.5 dB or 1 %.
-    const double step = p.kind == TwKind::Unit ? 0.005 : (p.kind == TwKind::Decibel ? 0.5 / (p.max - p.min) : 0.01);
+    // 0.5 % for the 0…1 controls, 0.5 dB for the gains, 1 % for the mix
+    const bool db = p.law == spux::params::ParamLaw::Db;
+    const bool unit = p.kind == spux::params::ParamKind::Float && !db && c.param != TW_MIX;
+    const double step = unit ? 0.005 : (db ? 0.5 / (p.max - p.min) : 0.01);
     plugin_->onBeginEditFromGui(static_cast<clap_id>(c.param));
     setNorm(c.param, norm(c.param) + delta * step);
     plugin_->onEndEditFromGui(static_cast<clap_id>(c.param));
@@ -701,72 +704,5 @@ void TwGui::onExpose() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     present();
 }
-
-// --- CLAP GUI extension --------------------------------------------------------------------------
-
-static TearwashClap* selfOf(const clap_plugin_t* p) { return static_cast<TearwashClap*>(p->plugin_data); }
-
-const clap_plugin_gui_t g_tearwashGuiExtension = {
-    [](const clap_plugin_t*, const char* api, bool floating) -> bool {
-#if defined(__linux__) && !defined(__APPLE__)
-        return api && std::strcmp(api, CLAP_WINDOW_API_X11) == 0 && !floating;
-#elif defined(_WIN32)
-        return api && std::strcmp(api, CLAP_WINDOW_API_WIN32) == 0 && !floating;
-#else
-        (void)api; (void)floating;
-        return false;
-#endif
-    },
-    [](const clap_plugin_t*, const char** api, bool* floating) -> bool {
-        if (!api || !floating) return false;
-#if defined(__linux__) && !defined(__APPLE__)
-        *api = CLAP_WINDOW_API_X11;
-#elif defined(_WIN32)
-        *api = CLAP_WINDOW_API_WIN32;
-#else
-        return false;
-#endif
-        *floating = false;
-        return true;
-    },
-    [](const clap_plugin_t* p, const char*, bool) -> bool {
-        try { selfOf(p)->createGuiWindow(); } catch (...) { return false; }
-        return true;
-    },
-    [](const clap_plugin_t* p) { try { selfOf(p)->destroyGuiWindow(); } catch (...) {} },
-    [](const clap_plugin_t*, double) -> bool { return false; },
-    [](const clap_plugin_t*, uint32_t* w, uint32_t* h) -> bool {
-        if (!w || !h) return false;
-        *w = TwGui::kWidth;
-        *h = TwGui::kHeight;
-        return true;
-    },
-    [](const clap_plugin_t*) -> bool { return false; },
-    [](const clap_plugin_t*, clap_gui_resize_hints_t*) -> bool { return false; },
-    [](const clap_plugin_t*, uint32_t* w, uint32_t* h) -> bool {
-        if (!w || !h) return false;
-        *w = TwGui::kWidth;
-        *h = TwGui::kHeight;
-        return true;
-    },
-    [](const clap_plugin_t* p, uint32_t w, uint32_t h) -> bool {
-        try { auto* g = selfOf(p)->getGuiWindow(); return g ? g->setSize(w, h) : true; } catch (...) { return false; }
-    },
-    [](const clap_plugin_t* p, const clap_window_t* window) -> bool {
-        if (!window || !window->api) return false;
-        try {
-            if (!selfOf(p)->getGuiWindow()) selfOf(p)->createGuiWindow();
-            return selfOf(p)->getGuiWindow()->setParent(window);
-        } catch (...) { return false; }
-    },
-    [](const clap_plugin_t*, const clap_window_t*) -> bool { return false; },
-    [](const clap_plugin_t*, const char*) {},
-    [](const clap_plugin_t* p) -> bool {
-        try { auto* g = selfOf(p)->getGuiWindow(); return g ? g->show() : false; } catch (...) { return false; }
-    },
-    [](const clap_plugin_t* p) -> bool {
-        try { auto* g = selfOf(p)->getGuiWindow(); return g ? g->hide() : false; } catch (...) { return false; }
-    },
-};
 
 } // namespace tearwash

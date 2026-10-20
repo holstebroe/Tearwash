@@ -1,0 +1,31 @@
+// Tearwash parameters: the single source of truth (docs/02_ENGINE.md §5), in spux's X-macro columns
+// (extern/spux/include/spux/params/ParamTable.hpp):
+//
+// SPUX_PARAM(id, key, name, kind, min, max, law, default, flags, labels, module, smoothing)
+//
+// Ids are the TwParam enum (TwParams.hpp) and never change; keys never change; only append. Host values
+// are the plain values (0…1 controls, the program index, dB): PF_HOST_PLAIN on the dB rows keeps them so.
+// The engine laws (Reverb.hpp, law::) turn the 0…1 controls into seconds, Hz and ms; TwParams.cpp has the
+// value text. Defaults are the first program's stored settings (TwParams.cpp checks them against
+// Reverb::programDefaults(0)). The program's labels are the engine's program names (Reverb::programName).
+// Smoothing: none here; the plugin smooths input gain, mix and output gain itself (10 ms one-pole).
+SPUX_PARAM( 0, program,    "Program",          Enum,  0,   9,  Linear, 0,       PF_AUTO|PF_STEPPED,    "", "Program", NoSmoothing)
+SPUX_PARAM( 1, decay,      "High Decay",       Float, 0,   1,  Linear, 0.5,     PF_AUTO,               "", "Decay",   NoSmoothing)
+SPUX_PARAM( 2, lowdecay,   "Low Decay",        Float, 0,   1,  Linear, 0.58,    PF_AUTO,               "", "Decay",   NoSmoothing)
+SPUX_PARAM( 3, crossover,  "Split Freq",       Float, 0,   1,  Linear, 0.3,     PF_AUTO,               "", "Decay",   NoSmoothing)
+SPUX_PARAM( 4, damping,    "Damp Cut",         Float, 0,   1,  Linear, 0.7,     PF_AUTO,               "", "Decay",   NoSmoothing)
+SPUX_PARAM( 5, distance,   "Distance",         Float, 0,   1,  Linear, 0.4,     PF_AUTO,               "", "Space",   NoSmoothing)
+SPUX_PARAM( 6, predelay,   "Predelay",         Float, 0,   1,  Linear, 0.1,     PF_AUTO,               "", "Space",   NoSmoothing)
+SPUX_PARAM( 7, diffusion,  "Diffusion",        Float, 0,   1,  Linear, 0.55,    PF_AUTO,               "", "Space",   NoSmoothing)
+SPUX_PARAM( 8, modulation, "Modulation",       Bool,  0,   1,  Linear, 1,       PF_AUTO|PF_STEPPED,    "", "Motion",  NoSmoothing)
+SPUX_PARAM( 9, modrate,    "Mod Rate",         Float, 0,   1,  Linear, 0.3,     PF_AUTO,               "", "Motion",  NoSmoothing)
+SPUX_PARAM(10, rear,       "Rear Outputs",     Bool,  0,   1,  Linear, 0,       PF_AUTO|PF_STEPPED,    "", "Output",  NoSmoothing)
+SPUX_PARAM(11, size,       "Size",             Float, 0,   1,  Linear, 0.5,     PF_AUTO,               "", "Space",   NoSmoothing)
+SPUX_PARAM(12, clarity,    "Clarity",          Float, 0,   1,  Linear, 0.25,    PF_AUTO,               "", "Space",   NoSmoothing)
+SPUX_PARAM(13, highcut,    "In Cut",           Float, 0,   1,  Linear, 0.85,    PF_AUTO,               "", "Decay",   NoSmoothing)
+SPUX_PARAM(14, mix,        "Mix",              Float, 0,   1,  Linear, 0.35,    PF_AUTO,               "", "Output",  NoSmoothing)
+SPUX_PARAM(15, ingain,     "Input Gain",       Float, -12, 12, Db,     0,       PF_AUTO|PF_HOST_PLAIN, "", "Output",  NoSmoothing)
+SPUX_PARAM(16, outgain,    "Output Gain",      Float, -60, 12, Db,     0,       PF_AUTO|PF_HOST_PLAIN, "", "Output",  NoSmoothing)
+SPUX_PARAM(17, moddepth,   "Mod Depth",        Float, 0,   1,  Linear, 0.4,     PF_AUTO,               "", "Motion",  NoSmoothing)
+SPUX_PARAM(18, shimmer,    "Shimmer",          Float, 0,   1,  Linear, 0,       PF_AUTO,               "", "Shimmer", NoSmoothing)
+SPUX_PARAM(19, shimmerint, "Shimmer Interval", Float, 0,   1,  Linear, 2.0/3.0, PF_AUTO,               "", "Shimmer", NoSmoothing)

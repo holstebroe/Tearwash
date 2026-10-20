@@ -3,7 +3,8 @@
 ## 1. Products
 
 - **`tearwash.clap`**: stereo audio effect, own panel, factory and user presets
-  (plugin id `com.holstebroe.tearwash`, state header `tearwash 1`).
+  (plugin id `com.holstebroe.tearwash`, state: spux container `TWR1` version 1; the text state
+  `tearwash 1` from before it still loads, 03 §1).
 - **Tannhäuser's reverb** (later, PLAN TW7): the same engine behind Tannhäuser's four reverb
   knobs (§4).
 
@@ -15,11 +16,12 @@ Everything here is an added feature [A]: Tearwash models no particular hardware 
 | --- | --- |
 | `src/tearwash/engine/Reverb.{hpp,cpp}` | the engine (`tearwash::Reverb`, controls, laws, programs); no plugin or GUI dependencies |
 | `src/tearwash/analysis/Metrics.hpp` | offline filters and Schroeder decay fits for the tests |
-| `src/tearwash/plugin/TwParams.*` | parameters: ids, keys, ranges, value text (the single source of truth) |
+| `src/tearwash/plugin/TwParams.{def,hpp,cpp}` | parameters: `TwParams.def` (spux_params X-macro: ids, keys, ranges, defaults; the single source of truth), lookups and value text |
+| `src/tearwash/plugin/TwState.*` | host state: spux_state container `TWR1` (PARM, PRST), reader of the text state from before it |
 | `src/tearwash/plugin/TwPresets.*`, `TwPresetData.cpp` | presets (03); `TwPresetData.cpp` is generated |
-| `src/tearwash/plugin/TearwashClap.*` | CLAP entry, params, state, preset-load, preset discovery |
+| `src/tearwash/plugin/TearwashClap.*` | the plugin on spux_clap (`spux::clap::Plugin<TearwashClap>`: params, state, audio ports and GUI extensions from its methods), preset-load, preset discovery, entry |
 | `src/tearwash/plugin/TwGui.*` | the panel (Tannhäuser's procedural drawing; the window is spux's `spux::platform::NativeWindow`) |
-| `src/tests/tearwash_{dsp,gui,preset}_test_main.cpp` | tests (02 §6, 03 §6) |
+| `src/tests/tearwash_{dsp,gui,preset,state}_test_main.cpp`, `src/tests/data/` | tests (02 §6, 03 §6); fixtures saved by Tearwash before spux |
 | `tools/` | preset library, generator, loudness trims |
 
 ## 3. Threads and real time
