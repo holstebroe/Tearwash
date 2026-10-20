@@ -36,6 +36,7 @@ jobs:
       run: |
         build/tearwash_dsp_test
         build/tearwash_preset_test
+        build/tearwash_state_test
         xvfb-run -a build/tearwash_gui_test build/tearwash_snapshot.ppm
 
     - name: Upload Artifact
