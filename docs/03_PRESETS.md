@@ -20,10 +20,11 @@ Tearwash's preset system, in the manner of Tannhäuser's (`docs/spec/05_PRESETS.
 - Loading a preset sets every parameter and sends each change to the host as a gesture. The
   plugin state records the preset's name, so the modified marker survives a session.
 - **State** (the host's project data, `TwState.hpp`): spux's chunk container with the magic `TWR1`,
-  version 2: chunk `PARM` (id and plain value per parameter, float64) and `PRST` (the preset name).
+  version 1: chunk `PARM` (id and plain value per parameter, float64) and `PRST` (the preset name).
   Unknown chunks and ids are skipped, missing parameters keep their defaults, values are clamped.
-  Version 1, the text state before spux (`tearwash 1`, a `preset=` line, then `key=value` lines),
-  still loads and is saved again as version 2.
+  The text state from before the container (`tearwash 1`, a `preset=` line, then `key=value` lines)
+  still loads and is saved again as the container. Tearwash was unreleased then, so the container is
+  version 1; each later version adds a migration step (`TwState.cpp`).
 
 ## 2. Library and categories
 

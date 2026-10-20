@@ -10,7 +10,7 @@ third-party DSP or GUI libraries.
   the include root `src/` (`"tearwash/engine/Reverb.hpp"`); other projects depend on it.
 - Parameters: `src/tearwash/plugin/TwParams.def` (spux_params X-macro) is the source of truth, mirrored in
   `docs/02_ENGINE.md` §5. Never renumber ids or rename keys; only append. The host state is the spux container
-  `TWR1` (`TwState.*`); never break loading of older states (the version 1 text state included):
+  `TWR1` (`TwState.*`); never break loading of older states (the text state from before the container included):
   `tearwash_state_test` loads the states in `src/tests/data/` saved by earlier versions.
 - Presets: edit `tools/preset_library.py`, run `python3 tools/gen_presets.py` (never edit
   `src/tearwash/plugin/TwPresetData.cpp`), rebuild, `build/tearwash_preset_test --fit

@@ -16,7 +16,7 @@ constexpr ss::FourCC kMagic{ "TWR1" };
 constexpr ss::FourCC kPresetChunk{ "PRST" };
 constexpr size_t kMaxPresetName = 1024;
 
-// Version 1: "tearwash 1", then lines `preset=NAME` and `key=value` (%.17g).
+// The text state from before the container: "tearwash 1", then lines `preset=NAME` and `key=value` (%.17g).
 bool parseText(std::span<const uint8_t> bytes, TwState& out) {
     std::istringstream in(std::string(bytes.begin(), bytes.end()));
     std::string line;
@@ -29,15 +29,13 @@ bool parseText(std::span<const uint8_t> bytes, TwState& out) {
         const uint32_t id = twParamByKey(line.substr(0, eq).c_str());
         if (id < TW_PARAM_COUNT) out.values[id] = std::strtod(line.c_str() + eq + 1, nullptr);
     }
-    out.version = 1;
+    out.version = 0;
     return true;
 }
 
-// One step per released version (spux migration hook). 1 → 2: the text state holds the same values
-// and preset name as the container, so there is nothing to convert.
-constexpr ss::Migration<TwState> kMigrations[] = {
-    { 1, [](TwState&) {} },
-};
+// One step per released version (spux migration hook): { from, apply } turns version `from` into
+// `from + 1`. None yet: version 1 is the first. The text state reads into the same values and preset
+// name as the container, so it needs no step either.
 
 } // namespace
 
@@ -77,7 +75,6 @@ bool parseState(std::span<const uint8_t> bytes, TwState& out) {
     } else if (!parseText(bytes, s)) {
         return false;
     }
-    ss::migrate<TwState>(s, s.version, kMigrations);
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) s.values[i] = twClamp(i, s.values[i]);
     out = std::move(s);
     return true;
