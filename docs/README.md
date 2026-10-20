@@ -18,4 +18,5 @@ cmake -S . -B build && cmake --build build -j
 build/tearwash_dsp_test
 build/tearwash_gui_test build/tearwash_snapshot.ppm
 build/tearwash_preset_test
+build/tearwash_state_test
 ```

@@ -23,6 +23,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
 | 2026-10-16 | Neutral vocabulary for programs and controls (DECAY, LOW DECAY, DAMPING, DISTANCE, CLARITY, HIGH CUT, MOD RATE; GRAND HALL … VAST SPACE). |
 | 2026-10-16 | Factory decays stop at 58 s: the top of DECAY is the hold, which mutes the input, so it belongs to live use. |
 | 2026-10-16 | Tannhäuser keeps its legacy plate as default for existing sounds; Tearwash becomes `rev.model` 1 in TW7. |
+| 2026-10-20 | Host state becomes spux's chunk container, magic `TWR1`, version 2 (the text state was version 1 and keeps loading). Presets (`.twpreset`) stay text. |
 
 ## Progress log
 
@@ -50,3 +51,9 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
   nothing). The idle buttons, the knob shadows and the labels are drawn once into the cached background; only
   the selected or hovered button, the fader caps, the knob bodies and the values are redrawn, and the 2x2
   downsample works on two channels at a time.
+- 2026-10-20 — Plugin on spux_params, spux_state and spux_clap (spux migration step 5, Tearwash as pilot):
+  the parameter table is `TwParams.def` (same ids, keys, names, modules, ranges, defaults and flags), values
+  live in a spux `ParamStore`, GUI and preset edits reach the host through a spux `EditQueue` (was a mutex-guarded
+  array), the CLAP tables come from `spux::clap::Plugin`, and the state is the spux container `TWR1` v2 (the
+  text state `tearwash 1` still loads). New `tearwash_state_test` with states, a preset and the parameter info and
+  value text saved by the previous version; audio output and the panel snapshot are bit-identical.

@@ -1,0 +1,22 @@
+tearwash 1
+preset=My Lost Space
+program=3
+decay=0.28000000000000003
+lowdecay=0.29999999999999999
+crossover=0.34999999999999998
+damping=0.75
+distance=0.25
+predelay=0.040000000000000001
+diffusion=0.123456789
+modulation=1
+modrate=0.29999999999999999
+rear=0
+size=0.5
+clarity=0.14999999999999999
+highcut=0.90000000000000002
+mix=0.77000000000000002
+ingain=0
+outgain=0
+moddepth=0.40000000000000002
+shimmer=0
+shimmerint=0.66666666666666663

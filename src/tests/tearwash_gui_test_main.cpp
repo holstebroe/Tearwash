@@ -382,19 +382,20 @@ int main(int argc, char** argv) {
     p.selectProgram(3);   // ROOM
     p.onParamValueFromGui(TW_SIZE, 0.25);
     p.onParamValueFromGui(TW_OUTGAIN, -6.0);
-    const std::string st = p.stateText();
+    const std::vector<uint8_t> st = p.stateBytes();
     {
         const clap_plugin_t* cp2 = factory->create_plugin(factory, &g_host, "com.holstebroe.tearwash");
         auto& q = *static_cast<TearwashClap*>(cp2->plugin_data);
         cp2->init(cp2);
         cp2->activate(cp2, 44100.0, 32, 512);
-        CHECK(q.loadStateText(st), "state loads");
+        CHECK(q.loadState(st), "state loads");
         bool same = true;
         for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) same = same && q.paramValue(i) == p.paramValue(i);
         CHECK(same, "state round trip");
-        CHECK(q.stateText() == st, "state text stable");
+        CHECK(q.stateBytes() == st, "state bytes stable");
         impulseCheck(q, "restored ROOM at 44.1 kHz");
-        CHECK(!q.loadStateText("garbage"), "rejects foreign state");
+        const std::string garbage = "garbage";
+        CHECK(!q.loadState(std::vector<uint8_t>(garbage.begin(), garbage.end())), "rejects foreign state");
         cp2->destroy(cp2);
     }
 

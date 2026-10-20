@@ -23,8 +23,6 @@ namespace tearwash {
 
 class TearwashClap;
 
-extern const clap_plugin_gui_t g_tearwashGuiExtension;
-
 class TwGui : private spux::platform::WindowEvents {
 public:
     static constexpr uint32_t kWidth = 640, kHeight = 628;
