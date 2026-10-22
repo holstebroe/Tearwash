@@ -1,11 +1,14 @@
 // Tearwash plugin and GUI verification: every program renders a finite, decaying response
-// through the CLAP process call; the panel draws, its controls reach the parameters; host program
-// changes load the program's settings; the state round-trips. With a path argument it writes a
-// <path> snapshot for visual review. With an X display (xvfb-run) it also opens the panel in a real
+// through the CLAP process call; the panel (spux's editor with the Classic style) draws, its controls reach the
+// parameters; host program changes load the program's settings; the state round-trips. With a path argument it
+// writes a <path> snapshot for visual review. With an X display (xvfb-run) it also opens the panel in a real
 // X11 window and checks that it shows the pixel buffer, and that clicks, wheel and the timer arrive.
 
 #include "tearwash/plugin/TearwashClap.hpp"
-#include "tearwash/plugin/TwGui.hpp"
+#ifdef TEARWASH_WITH_EDITOR
+#include "GoldenFrame.hpp"
+#include "tearwash/plugin/TwEditor.hpp"
+#endif
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -82,14 +85,31 @@ static void run(TearwashClap& p, const std::vector<float>& inL, const std::vecto
     }
 }
 
-static void writePpm(const TwGui& w, const std::string& path) {
+#ifdef TEARWASH_WITH_EDITOR
+using spux::ui::MouseButton;
+using spux::ui::Rect;
+
+static void writePpm(TwEditor& w, const std::string& path) {
     std::ofstream f(path, std::ios::binary);
-    f << "P6\n" << w.getWidth() << " " << w.getHeight() << "\n255\n";
-    for (uint32_t px : w.getPixelBuffer()) {
-        const char rgb[3] = { static_cast<char>((px >> 16) & 0xFF), static_cast<char>((px >> 8) & 0xFF), static_cast<char>(px & 0xFF) };
+    f << "P6\n" << w.editor().width() << " " << w.editor().height() << "\n255\n";
+    const uint32_t* px = w.editor().pixels();
+    for (int i = 0; i < w.editor().width() * w.editor().height(); ++i) {
+        const char rgb[3] = { static_cast<char>((px[i] >> 16) & 0xFF), static_cast<char>((px[i] >> 8) & 0xFF), static_cast<char>(px[i] & 0xFF) };
         f.write(rgb, 3);
     }
 }
+
+// Input as the editor receives it, a frame after each event (the Gui handles input at the start of a frame).
+struct Panel {
+    TwEditor& ed;
+    void down(float x, float y, bool shift = false) { ed.editor().mouseDown(x, y, MouseButton::Left, shift); ed.drawFrame(true); }
+    void up(float x, float y) { ed.editor().mouseUp(x, y, MouseButton::Left); ed.drawFrame(true); }
+    void move(float x, float y) { ed.editor().mouseMove(x, y); ed.drawFrame(true); }
+    void wheel(float x, float y, float steps) { ed.editor().mouseWheel(x, y, steps, false); ed.drawFrame(true); }
+    void click(float x, float y) { move(x, y); down(x, y); up(x, y); }
+};
+static spux::ui::Point centerOf(const Rect& r) { return r.center(); }
+#endif
 
 // Impulse response of the current program: returns the wet energy in the tail window and
 // checks finiteness and level.
@@ -112,13 +132,13 @@ static double impulseCheck(TearwashClap& p, const char* what) {
     return tail;
 }
 
-#if defined(__linux__) && !defined(__APPLE__)
+#if defined(__linux__) && !defined(__APPLE__) && defined(TEARWASH_WITH_EDITOR)
 // The panel in a real X11 window: it shows the pixel buffer, repaints on its own, and takes input.
 static void windowTest(TearwashClap& p) {
     if (!std::getenv("DISPLAY")) { std::printf("window test skipped (no DISPLAY)\n"); return; }
     using namespace std::chrono_literals;
     p.createGuiWindow();
-    TwGui& gui = *p.getGuiWindow();
+    TwEditor& gui = *p.getGuiWindow();
     clap_window_t parent = {};
     parent.api = CLAP_WINDOW_API_X11;
     parent.x11 = 0;   // the root window
@@ -129,7 +149,8 @@ static void windowTest(TearwashClap& p) {
     }
     CHECK(opened, "panel opens in an X11 window");
     if (!opened) { p.destroyGuiWindow(); return; }
-    CHECK(gui.setSize(TwGui::kWidth, TwGui::kHeight) && !gui.setSize(100, 100), "fixed size");
+    CHECK(gui.setSize(TwEditor::kWidth, TwEditor::kHeight) && !gui.setSize(100, 100), "fixed size");
+    gui.show();
     std::this_thread::sleep_for(300ms);
 
     Display* d = XOpenDisplay(nullptr);
@@ -140,31 +161,26 @@ static void windowTest(TearwashClap& p) {
     XQueryTree(d, DefaultRootWindow(d), &root, &par, &kids, &n);
     for (unsigned i = 0; i < n; ++i) {
         XWindowAttributes a;
-        if (XGetWindowAttributes(d, kids[i], &a) && a.width == int(TwGui::kWidth) && a.height == int(TwGui::kHeight) && a.map_state == IsViewable) found = kids[i];
+        if (XGetWindowAttributes(d, kids[i], &a) && a.width == int(TwEditor::kWidth) && a.height == int(TwEditor::kHeight) && a.map_state == IsViewable) found = kids[i];
     }
     if (kids) XFree(kids);
-    CHECK(found != 0, "the panel window is mapped at %ux%u", TwGui::kWidth, TwGui::kHeight);
+    CHECK(found != 0, "the panel window is mapped at %ux%u", TwEditor::kWidth, TwEditor::kHeight);
     if (!found) { XCloseDisplay(d); p.destroyGuiWindow(); return; }
 
-    // The window shows the pixel buffer.
-    {
-        XImage* img = XGetImage(d, found, 0, 0, TwGui::kWidth, TwGui::kHeight, AllPlanes, ZPixmap);
-        CHECK(img != nullptr, "read the window back");
-        if (img) {
-            const auto& px = gui.getPixelBuffer();
-            long bad = 0;
-            for (uint32_t y = 0; y < TwGui::kHeight; y += 7)
-                for (uint32_t x = 0; x < TwGui::kWidth; x += 5)
-                    if ((XGetPixel(img, int(x), int(y)) & 0xFFFFFFul) != (px[y * TwGui::kWidth + x] & 0xFFFFFFu)) ++bad;
-            CHECK(bad == 0, "window pixels equal the panel (%ld differ)", bad);
-            XDestroyImage(img);
-        }
-    }
-
-    auto centre = [&](TwGui::Kind k, int id, int& x, int& y) {
-        const auto& c = gui.controls()[static_cast<size_t>(gui.findControl(k, id))];
-        x = static_cast<int>(c.x + c.w / 2); y = static_cast<int>(c.y + c.h / 2);
+    auto compare = [&](const char* what) {
+        XImage* img = XGetImage(d, found, 0, 0, TwEditor::kWidth, TwEditor::kHeight, AllPlanes, ZPixmap);
+        CHECK(img != nullptr, "read the window back (%s)", what);
+        if (!img) return;
+        const uint32_t* px = gui.editor().pixels();
+        long bad = 0;
+        for (uint32_t y = 0; y < TwEditor::kHeight; y += 7)
+            for (uint32_t x = 0; x < TwEditor::kWidth; x += 5)
+                if ((XGetPixel(img, int(x), int(y)) & 0xFFFFFFul) != (px[y * TwEditor::kWidth + x] & 0xFFFFFFu)) ++bad;
+        CHECK(bad == 0, "window pixels equal the panel, %s (%ld differ)", what, bad);
+        XDestroyImage(img);
     };
+    compare("at first");
+
     auto button = [&](int type, unsigned which, int x, int y, unsigned state = 0) {
         XEvent e = {};
         e.xbutton.type = type; e.xbutton.window = found; e.xbutton.x = x; e.xbutton.y = y; e.xbutton.button = which; e.xbutton.state = state;
@@ -177,18 +193,21 @@ static void windowTest(TearwashClap& p) {
         XSendEvent(d, found, False, PointerMotionMask, reinterpret_cast<XEvent*>(&m));
         XFlush(d);
     };
-    auto settle = [&] { std::this_thread::sleep_for(150ms); };
+    auto settle = [&] { std::this_thread::sleep_for(250ms); };
     int x, y;
+    auto centre = [&](const Rect& r) { x = static_cast<int>(r.center().x); y = static_cast<int>(r.center().y); };
 
     // Click: a program button selects its program.
-    centre(TwGui::Kind::Program, 2, x, y);
+    centre(programButton(2));
+    motion(x, y, 0); settle();
     button(ButtonPress, Button1, x, y); button(ButtonRelease, Button1, x, y);
     settle();
     CHECK(p.program() == 2, "X11 click on a program button (%d)", p.program());
 
     // Wheel (buttons 4 and 5): 0.5 % per notch, up and down.
-    centre(TwGui::Kind::Fader, TW_PREDELAY, x, y);
+    centre(spaceFaders()[1].box);   // PREDELAY
     const double w0 = p.paramValue(TW_PREDELAY);
+    motion(x, y, 0); settle();
     button(ButtonPress, Button4, x, y); button(ButtonRelease, Button4, x, y);
     settle();
     CHECK(std::fabs(p.paramValue(TW_PREDELAY) - (w0 + 0.005)) < 1e-9, "X11 wheel up (%.4f → %.4f)", w0, p.paramValue(TW_PREDELAY));
@@ -196,42 +215,32 @@ static void windowTest(TearwashClap& p) {
     settle();
     CHECK(std::fabs(p.paramValue(TW_PREDELAY) - w0) < 1e-9, "X11 wheel down");
 
-    // Drag (motion with button 1 held) moves a knob; hover (motion without) gives the tooltip.
-    centre(TwGui::Kind::Knob, TW_MODDEPTH, x, y);
+    // Drag (motion with button 1 held) moves a knob; hover (motion without) gives the description.
+    centre(knobs()[1].box);   // MOD DEPTH
     const double m0 = p.paramValue(TW_MODDEPTH);
+    motion(x, y, 0); settle();
     button(ButtonPress, Button1, x, y);
-    for (int i = 1; i <= 6; ++i) { motion(x, y - 5 * i, Button1Mask); std::this_thread::sleep_for(30ms); }
+    for (int i = 1; i <= 6; ++i) { motion(x, y - 5 * i, Button1Mask); std::this_thread::sleep_for(60ms); }
     button(ButtonRelease, Button1, x, y - 30);
     settle();
     CHECK(p.paramValue(TW_MODDEPTH) > m0, "X11 drag raises the knob (%.3f → %.3f)", m0, p.paramValue(TW_MODDEPTH));
     motion(x, y, 0);
     settle();
-    CHECK(!gui.tooltipText().empty(), "X11 hover gives a tooltip");
+    CHECK(!gui.description().empty(), "X11 hover gives a description");
 
     // The timer repaints a changed panel without a call from outside: the change above reached the window.
-    {
-        XImage* img = XGetImage(d, found, 0, 0, TwGui::kWidth, TwGui::kHeight, AllPlanes, ZPixmap);
-        CHECK(img != nullptr, "read back after input");
-        if (img) {
-            const auto& px = gui.getPixelBuffer();
-            long bad = 0;
-            for (uint32_t yy = 0; yy < TwGui::kHeight; yy += 7)
-                for (uint32_t xx = 0; xx < TwGui::kWidth; xx += 5)
-                    if ((XGetPixel(img, int(xx), int(yy)) & 0xFFFFFFul) != (px[yy * TwGui::kWidth + xx] & 0xFFFFFFu)) ++bad;
-            CHECK(bad == 0, "window follows the panel after input (%ld differ)", bad);
-            XDestroyImage(img);
-        }
-    }
+    compare("after input");
 
     // Hidden: no repaints. Shown again: repaints.
     gui.hide();
     std::this_thread::sleep_for(100ms);
-    const int r0 = gui.redraws();
+    const auto r0 = gui.editor().framesDrawn();
     p.onParamValueFromGui(TW_SIZE, p.paramValue(TW_SIZE) > 0.5 ? 0.25 : 0.75);   // a change the panel would show
     settle();
-    CHECK(gui.redraws() == r0, "the timer does not repaint a hidden panel");
+    CHECK(gui.editor().framesDrawn() == r0, "the timer does not repaint a hidden panel");
     gui.show();
-    CHECK(gui.redraws() > r0, "a shown panel repaints");
+    settle();
+    CHECK(gui.editor().framesDrawn() > r0, "a shown panel repaints");
 
     XCloseDisplay(d);
     p.destroyGuiWindow();
@@ -240,6 +249,7 @@ static void windowTest(TearwashClap& p) {
 #endif
 
 int main(int argc, char** argv) {
+    (void)argc; (void)argv;   // the snapshot path, with an editor
     const auto* factory = static_cast<const clap_plugin_factory_t*>(clap_entry.get_factory(CLAP_PLUGIN_FACTORY_ID));
     CHECK(factory && factory->get_plugin_count(factory) == 1, "factory");
     const clap_plugin_t* cp = factory->create_plugin(factory, &g_host, "com.holstebroe.tearwash");
@@ -295,66 +305,63 @@ int main(int argc, char** argv) {
         CHECK(p.paramValue(TW_DECAY) == 0.66 && p.program() == 9, "host control change keeps the program");
     }
 
+#ifdef TEARWASH_WITH_EDITOR
     // GUI.
     p.createGuiWindow();
-    TwGui& gui = *p.getGuiWindow();
-    gui.renderFrame();
+    TwEditor& gui = *p.getGuiWindow();
+    gui.drawFrame(true);
     {
-        const auto& px = gui.getPixelBuffer();
+        const uint32_t* px = gui.editor().pixels();
+        const int count = gui.editor().width() * gui.editor().height();
         double sum = 0, sum2 = 0;
-        for (uint32_t v : px) { const double y = ((v >> 16) & 0xFF) + ((v >> 8) & 0xFF) + (v & 0xFF); sum += y; sum2 += y * y; }
-        const double mean = sum / px.size(), var = sum2 / px.size() - mean * mean;
+        for (int i = 0; i < count; ++i) { const uint32_t v = px[i]; const double y = ((v >> 16) & 0xFF) + ((v >> 8) & 0xFF) + (v & 0xFF); sum += y; sum2 += y * y; }
+        const double mean = sum / count, var = sum2 / count - mean * mean;
         CHECK(var > 100.0, "panel has content (variance %.1f)", var);
+        CHECK(gui.editor().width() == int(TwEditor::kWidth) && gui.editor().height() == int(TwEditor::kHeight), "panel size");
     }
-    auto centre = [&](int i, int& x, int& y) {
-        const auto& c = gui.controls()[static_cast<size_t>(i)];
-        x = static_cast<int>(c.x + c.w / 2); y = static_cast<int>(c.y + c.h / 2);
-    };
-    int x, y;
-    // Fader drag moves DECAY up.
-    const int dec = gui.findControl(TwGui::Kind::Fader, TW_DECAY);
-    CHECK(dec >= 0, "DECAY fader");
+    Panel panel{ gui };
+    // A fader drag moves DECAY up: the press lands on the cap, the drag is relative.
     {
-        const auto& c = gui.controls()[static_cast<size_t>(dec)];
+        const TwControl& c = decayFaders()[3];   // HIGH DECAY
+        CHECK(c.param == TW_DECAY, "DECAY fader");
         const double before = p.paramValue(TW_DECAY);
-        const float y1 = c.y + c.h - 8.f, y0 = c.y + 8.f;
-        const int capY = static_cast<int>(y1 - before * (y1 - y0));
-        gui.handleMouseDown(static_cast<int>(c.x + c.w / 2), capY, false);
-        gui.handleMouseDrag(static_cast<int>(c.x + c.w / 2), capY - 20, false);
-        gui.handleMouseUp();
+        const float y1 = static_cast<float>(c.box.y + c.box.h) - 8.f, y0 = static_cast<float>(c.box.y) + 8.f;
+        const float capY = y1 - static_cast<float>(before) * (y1 - y0), cx = c.box.center().x;
+        panel.move(cx, capY);
+        panel.down(cx, capY);
+        panel.move(cx, capY - 20.f);
+        panel.up(cx, capY - 20.f);
         CHECK(p.paramValue(TW_DECAY) > before, "fader drag raises DECAY (%.3f → %.3f)", before, p.paramValue(TW_DECAY));
-        gui.handleMouseMove(static_cast<int>(c.x + c.w / 2), capY);
-        CHECK(gui.tooltipText().find("high band") != std::string::npos, "tooltip '%s'", gui.tooltipText().c_str());
+        panel.move(cx, capY);
+        CHECK(gui.description().find("high band") != std::string::npos, "description '%s'", gui.description().c_str());
     }
     // Wheel: 0.5 % per notch.
     {
-        const int pre = gui.findControl(TwGui::Kind::Fader, TW_PREDELAY);
-        centre(pre, x, y);
+        const spux::ui::Point at = centerOf(spaceFaders()[1].box);   // PREDELAY
         const double before = p.paramValue(TW_PREDELAY);
-        gui.handleWheel(x, y, 1);
+        panel.move(at.x, at.y);
+        panel.wheel(at.x, at.y, 1.f);
         CHECK(std::fabs(p.paramValue(TW_PREDELAY) - std::min(1.0, before + 0.005)) < 1e-9, "wheel steps 0.5 %%");
-        gui.handleMouseMove(x, y);
-        CHECK(gui.tooltipText().find("Silence") == 0, "predelay description '%s'", gui.tooltipText().c_str());
+        CHECK(gui.description().find("Silence") == 0, "predelay description '%s'", gui.description().c_str());
         char shown[48];
         twValueText(TW_PREDELAY, p.paramValue(TW_PREDELAY), shown, sizeof shown);
         CHECK(std::string(shown).find(" ms") != std::string::npos, "predelay value in ms: '%s'", shown);
     }
     // Mod depth knob: drag up raises the depth.
     {
-        const int k = gui.findControl(TwGui::Kind::Knob, TW_MODDEPTH);
-        CHECK(k >= 0, "mod depth knob");
-        centre(k, x, y);
+        const spux::ui::Point at = centerOf(knobs()[1].box);
+        CHECK(knobs()[1].param == TW_MODDEPTH, "mod depth knob");
         const double before = p.paramValue(TW_MODDEPTH);
-        gui.handleMouseDown(x, y, false);
-        gui.handleMouseDrag(x, y - 30, false);
-        gui.handleMouseUp();
+        panel.move(at.x, at.y);
+        panel.down(at.x, at.y);
+        panel.move(at.x, at.y - 30.f);
+        panel.up(at.x, at.y - 30.f);
         CHECK(p.paramValue(TW_MODDEPTH) > before, "mod depth knob drag (%.3f → %.3f)", before, p.paramValue(TW_MODDEPTH));
     }
     // Program buttons.
     {
-        centre(gui.findControl(TwGui::Kind::Program, 4), x, y);
-        gui.handleMouseDown(x, y, false);
-        gui.handleMouseUp();
+        const spux::ui::Point at = centerOf(programButton(4));
+        panel.click(at.x, at.y);
         CHECK(p.program() == 4, "program button selects CHAMBER (%d)", p.program());
         CHECK(p.presetName() == "PG CHAMBER" && !p.presetModified(), "the preset follows the program button ('%s')",
               p.presetName().c_str());
@@ -362,20 +369,39 @@ int main(int argc, char** argv) {
         std::vector<float> l(256, 0.f), r(256, 0.f), ol, orr;
         run(p, l, r, ol, orr);
         CHECK(!g_out.empty(), "program change reported to the host (%zu events)", g_out.size());
-        CHECK(gui.findControl(TwGui::Kind::Program, programCount() - 1) >= 0, "a button per program");
+        CHECK(programButton(programCount() - 1).w > 0, "a button per program");
     }
-    gui.renderFrame();
+    panel.move(300.f, 450.f);   // the pointer rests on no control
+    gui.drawFrame(true);
     if (argc > 1) writePpm(gui, argv[1]);
     // No redraw when nothing changed.
     {
-        gui.renderFrame();
-        const int r0 = gui.redraws();
-        gui.renderFrame();
-        CHECK(gui.redraws() == r0, "idle frame does not redraw");
+        gui.drawFrame(true);
+        CHECK(!gui.drawFrame(), "an idle frame does not draw");
     }
     p.destroyGuiWindow();
+
+    // The panel against its golden frame: a fresh plugin on a fixed preset, the pointer on nothing.
+    {
+        const clap_plugin_t* cpg = factory->create_plugin(factory, &g_host, "com.holstebroe.tearwash");
+        auto& q = *static_cast<TearwashClap*>(cpg->plugin_data);
+        cpg->init(cpg);
+        q.loadPreset(q.presetLibrary().indexOf("HL Golden Hall Of Music"));
+        q.createGuiWindow();
+        TwEditor& g = *q.getGuiWindow();
+        g.drawFrame(true);
+        const goldenframe::Result r = goldenframe::check(TEARWASH_GOLDEN_DIR, "panel", g.editor().pixels(), g.editor().width(), g.editor().height());
+        CHECK(r.ok, "panel golden frame: mean difference %.3f, moved %.3f %% (%s)", r.meanDiff, 100.0 * r.movedShare, r.note.c_str());
+        // And it is still the panel Tearwash had before the move onto spux, within what the shared Classic look changed
+        // (the second program row 3 px lower, the value rows, the fader scale and the preset bar's buttons).
+        const goldenframe::Result before = goldenframe::check(TEARWASH_GOLDEN_DIR, "before_spux_panel", g.editor().pixels(), g.editor().width(),
+                                                              g.editor().height(), 3.0, 0.04, true);
+        CHECK(before.ok, "panel against the one before spux: mean difference %.3f, moved %.3f %% (%s)", before.meanDiff, 100.0 * before.movedShare, before.note.c_str());
+        cpg->destroy(cpg);
+    }
 #if defined(__linux__) && !defined(__APPLE__)
     windowTest(p);
+#endif
 #endif
 
     // State round trip.

@@ -14,14 +14,14 @@ Everything here is an added feature [A]: Tearwash models no particular hardware 
 
 | Path | Content |
 | --- | --- |
-| `src/tearwash/engine/Reverb.{hpp,cpp}` | the engine (`tearwash::Reverb`, controls, laws, programs); no plugin or GUI dependencies |
+| `src/tearwash/engine/Reverb.{hpp,cpp}` | the engine (`tearwash::Reverb`, controls, laws, programs); no plugin or GUI dependencies; its delay lines are spux's (`spux_dsp`, header-only) |
 | `src/tearwash/analysis/Metrics.hpp` | offline filters and Schroeder decay fits for the tests |
 | `src/tearwash/plugin/TwParams.{def,hpp,cpp}` | parameters: `TwParams.def` (spux_params X-macro: ids, keys, ranges, defaults; the single source of truth), lookups and value text |
 | `src/tearwash/plugin/TwState.*` | host state: spux_state container `TWR1` (PARM, PRST), reader of the text state from before it |
 | `src/tearwash/plugin/TwPresets.*`, `TwPresetData.cpp` | presets (03); `TwPresetData.cpp` is generated |
 | `src/tearwash/plugin/TearwashClap.*` | the plugin on spux_clap (`spux::clap::Plugin<TearwashClap>`: params, state, audio ports and GUI extensions from its methods), preset-load, preset discovery, entry |
-| `src/tearwash/plugin/TwGui.*` | the panel (Tannhäuser's procedural drawing; the window is spux's `spux::platform::NativeWindow`) |
-| `src/tests/tearwash_{dsp,gui,preset,state}_test_main.cpp`, `src/tests/data/` | tests (02 §6, 03 §6); fixtures saved by Tearwash before spux |
+| `src/tearwash/plugin/TwLayout.hpp`, `TwEditor.*` | the panel: the layout as data, and page functions on spux's immediate-mode `Gui` with the Classic style (`Editor<ClassicStyle>`, spux's `NativeWindow`); `TwEditor` is the editor host and the root view. Only with `TEARWASH_UI=CLASSIC` (the default); `NONE` builds no editor |
+| `src/tests/tearwash_{dsp,gui,preset,state,null}_test_main.cpp`, `src/tests/data/`, `src/tests/reference/`, `src/tests/golden/` | tests (02 §6, 03 §6); fixtures saved by Tearwash before spux; reference renders of the null test (rendered before the move onto spux); golden frames of the panel |
 | `tools/` | preset library, generator, loudness trims |
 
 ## 3. Threads and real time

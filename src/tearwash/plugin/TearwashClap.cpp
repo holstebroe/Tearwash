@@ -1,6 +1,8 @@
 #include "TearwashClap.hpp"
 #include "spux/core/DenormalGuard.hpp"
-#include "TwGui.hpp"
+#ifdef TEARWASH_WITH_EDITOR
+#include "TwEditor.hpp"
+#endif
 #include "TwState.hpp"
 #include "spux/clap/ClapHelpers.hpp"
 #include <clap/ext/preset-load.h>
@@ -24,15 +26,19 @@ TearwashClap::TearwashClap(const clap_host_t* host) : Plugin(&descriptor(), host
 TearwashClap::~TearwashClap() = default;
 
 void TearwashClap::destroy() {
+#ifdef TEARWASH_WITH_EDITOR
     destroyGuiWindow();
+#endif
     delete this;
 }
 
+#ifdef TEARWASH_WITH_EDITOR
 void TearwashClap::createGuiWindow() {
-    if (!gui_) gui_ = std::make_unique<TwGui>(this);
+    if (!gui_) gui_ = std::make_unique<TwEditor>(this);
 }
 
 void TearwashClap::destroyGuiWindow() { gui_.reset(); }
+#endif
 
 // --- Programs ------------------------------------------------------------------------------------
 
@@ -452,6 +458,19 @@ bool TearwashClap::stateLoad(const clap_istream_t* stream) {
 
 // --- GUI -----------------------------------------------------------------------------------------
 
+// The editor writes a host value (every parameter's host value is its plain value) and queues the edit for the host.
+void TearwashClap::setHostValueFromGui(clap_id id, double host) {
+    if (id >= TW_PARAM_COUNT) return;
+    params_.setHost(id, host);
+    markDirty();
+}
+
+bool TearwashClap::pushEditFromGui(const spux::params::ParamEdit& e, size_t reserve) {
+    std::lock_guard<std::mutex> lock(queueMutex_);
+    return edits_.tryPush(e, reserve);
+}
+
+#ifdef TEARWASH_WITH_EDITOR
 bool TearwashClap::guiCreate(const char*, bool) {
     createGuiWindow();
     return true;
@@ -464,14 +483,15 @@ bool TearwashClap::guiSetParent(const clap_window_t* window) {
 }
 
 bool TearwashClap::guiGetSize(uint32_t* width, uint32_t* height) const {
-    *width = TwGui::kWidth;
-    *height = TwGui::kHeight;
+    *width = TwEditor::kWidth;
+    *height = TwEditor::kHeight;
     return true;
 }
 
 bool TearwashClap::guiSetSize(uint32_t width, uint32_t height) { return gui_ ? gui_->setSize(width, height) : true; }
 bool TearwashClap::guiShow() { return gui_ ? gui_->show() : false; }
 bool TearwashClap::guiHide() { return gui_ ? gui_->hide() : false; }
+#endif
 
 // --- Entry ---------------------------------------------------------------------------------------
 

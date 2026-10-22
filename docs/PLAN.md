@@ -57,6 +57,15 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
   array), the CLAP tables come from `spux::clap::Plugin`, and the state is the spux container `TWR1` v1 (the
   text state `tearwash 1` still loads). New `tearwash_state_test` with states, a preset and the parameter info and
   value text saved by the previous version; audio output and the panel snapshot are bit-identical.
+- 2026-10-22 — Plugin on spux, step 8 (`tearwash_null_test`, reference renders of 20 cases from before the move,
+  -90 dBFS gate): spux's flags on every target, the delay lines of the engine are `spux::dsp::DelayLine` (the null test
+  differs by -138 to -145 dBFS, last-bit rounding), gain smoothing is `Smoothed<OnePole<0.010>>`, the denormal guard
+  is spux's. The panel is page functions on spux's `Gui` with the Classic style (`TwEditor`, `TwLayout.hpp`; option
+  `TEARWASH_UI=CLASSIC|NONE`): the look is the shared slate look with Tearwash's caps and rows (`twClassicConfig`),
+  the preset menu is spux's popup with a submenu per category, tooltips and double-click reset come with the Gui. The
+  panel against the one before: mean difference 1.6 of 255, 1.8 % of the pixels moved by more than 24 (the second
+  program row is 3 px lower, the value and name rows sit up to 2 px differently, the fader scale and the preset bar's
+  buttons are spux's); golden frames in `src/tests/golden/`, `before_spux_*` record the earlier look.
 - 2026-10-20 — `.twpreset` files are read and written with spux's text preset code (spux P4, as changed that day):
   the same files byte for byte, now independent of the C locale. The state container is version 1 (Tearwash
   is unreleased).
