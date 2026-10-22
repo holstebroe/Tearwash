@@ -114,6 +114,12 @@ add_executable(tearwash_state_test ${TEARWASH_PLUGIN_SOURCES} src/tests/tearwash
 tearwash_configure(tearwash_state_test)
 target_compile_definitions(tearwash_state_test PRIVATE TEARWASH_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/tests/data")
 
+# Reference renders (src/tests/reference/) of curated cases through the plugin, compared by spux's null test.
+add_executable(tearwash_null_test ${TEARWASH_PLUGIN_SOURCES} src/tests/tearwash_null_test_main.cpp)
+tearwash_configure(tearwash_null_test)
+target_link_libraries(tearwash_null_test PRIVATE spux_testing)
+target_compile_definitions(tearwash_null_test PRIVATE TEARWASH_REFERENCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/tests/reference")
+
 if(TEARWASH_TOP_LEVEL)
     enable_testing()
 endif()
@@ -121,3 +127,4 @@ add_test(NAME tearwash_dsp COMMAND tearwash_dsp_test)
 add_test(NAME tearwash_gui COMMAND tearwash_gui_test)
 add_test(NAME tearwash_presets COMMAND tearwash_preset_test)
 add_test(NAME tearwash_state COMMAND tearwash_state_test)
+add_test(NAME tearwash_null COMMAND tearwash_null_test)
