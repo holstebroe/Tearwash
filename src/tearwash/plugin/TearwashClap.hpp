@@ -17,6 +17,7 @@
 #include "tearwash/engine/Reverb.hpp"
 
 #include "spux/clap/ClapPlugin.hpp"
+#include "spux/core/Smoothing.hpp"
 #include "spux/params/EditQueue.hpp"
 #include "spux/params/ParamStore.hpp"
 
@@ -125,8 +126,9 @@ private:
     // Scratch buffers, sized in activate().
     std::vector<float> scratch_[6];
     uint32_t maxFrames_ = 0;
-    double inGain_ = 1.0, outGain_ = 1.0, mix_ = 0.35;
-    double gainCoef_ = 0.001;
+    // Input gain, mix and output gain follow their targets with a 10 ms one-pole.
+    using GainSmoother = spux::Smoothed<spux::OnePole<0.010>, double>;
+    GainSmoother inGain_, mix_, outGain_;
     void render(const float* inL, const float* inR, float* outL, float* outR, uint32_t n);
 
     std::atomic<bool> stateDirty_{ false };

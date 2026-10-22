@@ -15,6 +15,9 @@ constexpr double kShimmerLowHz = 140.0, kShimmerHighHz = 6500.0;
 constexpr double kShimmerTap = 0.25;      // the output taps sum seven tank taps
 constexpr double kShimmerFeedback = 0.6;
 
+// The delay lines hold their longest length plus a margin (whole samples, rounded up).
+inline std::size_t lineSamples(double maxSamples) { return static_cast<std::size_t>(std::ceil(maxSamples)); }
+
 // The programs [A]. Delays in ms at SIZE ×1: four input diffusers, then per tank half the
 // modulated allpass, the first delay, the two decay diffusers and the delay into the other half.
 // Hall set (02 §3): input diffusers a geometric series 5.3·1.55^k ms; tank halves of ≈ 190 and
@@ -73,37 +76,6 @@ double onePole(double f, double fs) {
 const char* Reverb::programName(int i) { return kSpaces[i < 0 ? 0 : (i >= kPrograms ? kPrograms - 1 : i)].name; }
 Controls Reverb::programDefaults(int i) { return kSpaces[i < 0 ? 0 : (i >= kPrograms ? kPrograms - 1 : i)].def; }
 
-// ---- Delay line --------------------------------------------------------------------------------
-
-void Reverb::Delay::init(double maxSamples) {
-    uint32_t n = 16;
-    while (n < maxSamples + 8) n <<= 1;
-    buf.assign(n, 0.f);
-    mask = n - 1;
-    pos = 0;
-}
-
-void Reverb::Delay::clear() { std::fill(buf.begin(), buf.end(), 0.f); }
-
-inline float Reverb::Delay::lin(double d) const {
-    const double p = static_cast<double>(pos) - d;
-    const double f = std::floor(p);
-    const uint32_t i = static_cast<uint32_t>(static_cast<int64_t>(f));
-    const float t = static_cast<float>(p - f);
-    const float a = buf[i & mask], b = buf[(i + 1) & mask];
-    return a + t * (b - a);
-}
-
-inline float Reverb::Delay::cub(double d) const {
-    const double p = static_cast<double>(pos) - d;
-    const double f = std::floor(p);
-    const uint32_t i = static_cast<uint32_t>(static_cast<int64_t>(f));
-    const float t = static_cast<float>(p - f);
-    const float y0 = buf[(i - 1) & mask], y1 = buf[i & mask], y2 = buf[(i + 1) & mask], y3 = buf[(i + 2) & mask];
-    const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
-    return ((c3 * t + c2) * t + c1) * t + y1;
-}
-
 inline double Reverb::Wander::run(double periodSamples, double smooth) {
     if ((phase += 1.0) >= periodSamples) {
         phase -= periodSamples;
@@ -129,18 +101,18 @@ void Reverb::setSampleRate(double fs) {
         for (int h = 0; h < 2; ++h)
             for (int k = 0; k < 5; ++k) tankMax[k] = std::max(tankMax[k], kSet[s.set][4 + 5 * h + k] * sc);
     }
-    preL_.init(1000.0 * ms + 4); preR_.init(1000.0 * ms + 4);
-    for (auto& ch : inAp_) for (auto& d : ch) d.init(inMax * 1.04 + 4);   // R runs 3.1 % longer
+    preL_.prepare(lineSamples(1000.0 * ms + 4)); preR_.prepare(lineSamples(1000.0 * ms + 4));
+    for (auto& ch : inAp_) for (auto& d : ch) d.prepare(lineSamples(inMax * 1.04 + 4));   // R runs 3.1 % longer
     for (auto& h : h_) {
-        h.ap.init(tankMax[0] + 4.0 * ms);
-        h.d1.init(tankMax[1] + 4);
-        h.dif1.init(tankMax[2] + 4);
-        h.dif2.init(tankMax[3] + 4);
-        h.d2.init(tankMax[4] + 4);
+        h.ap.prepare(lineSamples(tankMax[0] + 4.0 * ms));
+        h.d1.prepare(lineSamples(tankMax[1] + 4));
+        h.dif1.prepare(lineSamples(tankMax[2] + 4));
+        h.dif2.prepare(lineSamples(tankMax[3] + 4));
+        h.d2.prepare(lineSamples(tankMax[4] + 4));
     }
-    for (auto& v : voice_) v.init(60.0 * 2.0 * ms + 8.0 * ms);
+    for (auto& v : voice_) v.prepare(lineSamples(60.0 * 2.0 * ms + 8.0 * ms));
     shim_.window = kShimmerWindowMs * ms;
-    for (auto& d : shim_.line) d.init(shim_.window + 16.0);
+    for (auto& d : shim_.line) d.prepare(lineSamples(shim_.window + 16.0));
     allocated_ = true;
     slew_ = 1.0 - std::exp(-1.0 / (0.25 * fs));   // lengths glide over ≈ 0.25 s
     for (int k = 0; k < 8; ++k) vWander_[k].rng = 0x9E3779B9u * static_cast<uint32_t>(k + 1);
@@ -253,43 +225,43 @@ void Reverb::runTank(double xl, double xr, double& oa, double& ob, double& oc, d
         for (int k = 0; k < 4; ++k) {
             Delay& d = inAp_[ch][k];
             const double len = ch ? std::round(inLen_[k] * 1.031) : inLen_[k];
-            const double z = d.lin(len);
+            const double z = d.readLinear(len);
             const double w = v + gIn_ * z;
             v = z - gIn_ * w;
-            d.push(static_cast<float>(w));
+            d.write(static_cast<float>(w));
             if (k == 1) e[ch][0] = v;
             if (k == 3) e[ch][1] = v;
         }
         x[ch] = v;
     }
     // Figure-of-eight tank.
-    const double cross[2] = { h_[1].d2.lin(h_[1].d2Len), h_[0].d2.lin(h_[0].d2Len) };
+    const double cross[2] = { h_[1].d2.readLinear(h_[1].d2Len), h_[0].d2.readLinear(h_[0].d2Len) };
     for (int k = 0; k < 2; ++k) {
         Half& h = h_[k];
         double u = inGain_ * x[k] + cross[k] + shimFb_[k];
         // Modulated allpass (cubic interpolation, smooth random glide).
         const double m = modDepth_ > 0.0 ? modDepth_ * h.wander.run(modPeriod_, 4.0 / modPeriod_) : 0.0;
-        const double z = h.ap.cub(h.apBase + modDepth_ + m);
+        const double z = h.ap.readHermite(h.apBase + modDepth_ + m);
         const double w = u + gClar_ * z;
         u = z - gClar_ * w;
-        h.ap.push(static_cast<float>(guard(w)));
-        h.d1.push(static_cast<float>(u));
-        double b = h.d1.lin(h.d1Len);
+        h.ap.write(static_cast<float>(guard(w)));
+        h.d1.write(static_cast<float>(u));
+        double b = h.d1.readLinear(h.d1Len);
         // Two-band decay and damping.
         const double lo = h.xo.run(b);
         b = h.gLow * lo + h.gMid * (b - lo);
         b = guard(h.damp.run(b));
         // Decay diffusers.
-        double z1 = h.dif1.lin(h.dif1Len), w1 = b + gDif_ * z1;
+        double z1 = h.dif1.readLinear(h.dif1Len), w1 = b + gDif_ * z1;
         b = z1 - gDif_ * w1;
-        h.dif1.push(static_cast<float>(w1));
-        double z2 = h.dif2.lin(h.dif2Len), w2 = b + gDif_ * z2;
+        h.dif1.write(static_cast<float>(w1));
+        double z2 = h.dif2.readLinear(h.dif2Len), w2 = b + gDif_ * z2;
         b = z2 - gDif_ * w2;
-        h.dif2.push(static_cast<float>(w2));
-        h.d2.push(static_cast<float>(guard(b)));
+        h.dif2.write(static_cast<float>(w2));
+        h.d2.write(static_cast<float>(guard(b)));
     }
     // Output taps (fractions of the tank delays; signs alternate so the taps decorrelate).
-    auto t = [&](const Delay& d, double len, double f) { return static_cast<double>(d.lin(std::max(1.0, len * f))); };
+    auto t = [&](const Delay& d, double len, double f) { return static_cast<double>(d.readLinear(std::max(1.0, len * f))); };
     const Half& a = h_[0];
     const Half& c = h_[1];
     const double lateA = t(c.d1, c.d1Len, 0.12) + t(c.d1, c.d1Len, 0.71) - t(c.dif2, c.dif2Len, 0.63) + t(c.d2, c.d2Len, 0.41)
@@ -315,8 +287,8 @@ void Reverb::runTank(double xl, double xr, double& oa, double& ob, double& oc, d
         const double wA = q * q * (3.0 - 2.0 * q), wB = 1.0 - wA;   // the taps sit half a window apart
         const double dA = 3.0 + sh.phase * sh.window, dB = 3.0 + pB * sh.window;
         for (int ch = 0; ch < 2; ++ch) {
-            sh.line[ch].push(static_cast<float>(tap[ch]));
-            double y = wA * sh.line[ch].cub(dA) + wB * sh.line[ch].cub(dB);
+            sh.line[ch].write(static_cast<float>(tap[ch]));
+            double y = wA * sh.line[ch].readHermite(dA) + wB * sh.line[ch].readHermite(dB);
             y -= sh.hp[ch].run(y);   // high-pass: the low-pass state subtracted
             y = sh.lp2[ch].run(sh.lp1[ch].run(y));
             y *= shimGain_;
@@ -332,13 +304,13 @@ void Reverb::runTank(double xl, double xr, double& oa, double& ob, double& oc, d
 
 void Reverb::runEnsemble(double xl, double xr, double& oa, double& ob, double& oc, double& od) {
     // Eight voices read two gliding delay lines (L and R inputs plus the echo feedback).
-    voice_[0].push(static_cast<float>(inGain_ * xl + fbGain_ * fb_[0]));
-    voice_[1].push(static_cast<float>(inGain_ * xr + fbGain_ * fb_[1]));
+    voice_[0].write(static_cast<float>(inGain_ * xl + fbGain_ * fb_[0]));
+    voice_[1].write(static_cast<float>(inGain_ * xr + fbGain_ * fb_[1]));
     double l = 0.0, r = 0.0;
     const double depth = modDepth_ > 0.0 ? modDepth_ : 0.0;
     for (int k = 0; k < 8; ++k) {
         const double m = depth > 0.0 ? depth * (0.5 + 0.5 * vWander_[k].run(modPeriod_ * (0.7 + 0.08 * k), 4.0 / modPeriod_)) : 0.0;
-        const double y = voice_[k & 1].cub(vBase_[k] + m + 2.0);
+        const double y = voice_[k & 1].readHermite(vBase_[k] + m + 2.0);
         const double pl = 0.5 * (1.0 - vPan_[k]), pr = 0.5 * (1.0 + vPan_[k]);
         l += pl * y;
         r += pr * y;
@@ -349,10 +321,10 @@ void Reverb::runEnsemble(double xl, double xr, double& oa, double& ob, double& o
     for (int ch = 0; ch < 2; ++ch)
         for (int k = 0; k < 2; ++k) {
             Delay& d = inAp_[ch][k];
-            const double z = d.lin(inLen_[k] * (ch ? 1.031 : 1.0));
+            const double z = d.readLinear(inLen_[k] * (ch ? 1.031 : 1.0));
             const double w = v[ch] + gIn_ * z;
             v[ch] = z - gIn_ * w;
-            d.push(static_cast<float>(w));
+            d.write(static_cast<float>(w));
         }
     fb_[0] = guard(h_[0].damp.run(v[1]));   // echoes cross over
     fb_[1] = guard(h_[1].damp.run(v[0]));
@@ -386,9 +358,9 @@ void Reverb::process(const float* inL, const float* inR, float* const* out, int 
             shimFb_[0] = shimFb_[1] = 0.0;
         }
         const double l = bwL_.run(inL ? inL[i] : 0.0), r = bwR_.run(inR ? inR[i] : (inL ? inL[i] : 0.0));
-        preL_.push(static_cast<float>(l));
-        preR_.push(static_cast<float>(r));
-        const double pl = preL_.lin(preLen_), pr = preR_.lin(preLen_);
+        preL_.write(static_cast<float>(l));
+        preR_.write(static_cast<float>(r));
+        const double pl = preL_.readLinear(preLen_), pr = preR_.readLinear(preLen_);
         double a, b, c, d;
         if (ensemble) runEnsemble(pl, pr, a, b, c, d);
         else runTank(pl, pr, a, b, c, d);
