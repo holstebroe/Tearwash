@@ -14,6 +14,14 @@ else()
     set(TEARWASH_TOP_LEVEL OFF)
 endif()
 option(TEARWASH_BUILD_PLUGIN "Build tearwash.clap and its tests" ${TEARWASH_TOP_LEVEL})
+# The editor flavor of the plugin: CLASSIC (spux's Classic style), or NONE for a build without an editor (fast DSP
+# work and CI). Tearwash supports no other flavor.
+set(TEARWASH_UI "CLASSIC" CACHE STRING "Tearwash editor: CLASSIC or NONE")
+set_property(CACHE TEARWASH_UI PROPERTY STRINGS CLASSIC NONE)
+if(NOT TEARWASH_UI STREQUAL "CLASSIC" AND NOT TEARWASH_UI STREQUAL "NONE")
+    message(FATAL_ERROR "TEARWASH_UI must be CLASSIC or NONE, not '${TEARWASH_UI}'")
+endif()
+set(SPUX_UI_FLAVOR ${TEARWASH_UI})   # for spux's UI optimization choice
 
 if(TEARWASH_TOP_LEVEL)
     set(CMAKE_CXX_STANDARD 17)
@@ -58,11 +66,14 @@ endif()
 
 # The native window (X11, Win32) is spux_platform, which brings the OS libraries on Linux; the common
 # file dialog on Windows is comdlg32 (spux_ui_classic).
-if(APPLE)
-    find_library(COCOA_LIBRARY Cocoa)
-    set(TEARWASH_GUI_LIBS ${COCOA_LIBRARY})
-elseif(WIN32)
-    set(TEARWASH_GUI_LIBS comdlg32)
+set(TEARWASH_GUI_LIBS "")
+if(TEARWASH_UI STREQUAL "CLASSIC")
+    if(APPLE)
+        find_library(COCOA_LIBRARY Cocoa)
+        set(TEARWASH_GUI_LIBS ${COCOA_LIBRARY})
+    elseif(WIN32)
+        set(TEARWASH_GUI_LIBS comdlg32)
+    endif()
 endif()
 
 # CLAP headers: spux owns the clap submodule (third_party/clap); a parent project may override.
@@ -80,15 +91,22 @@ set(TEARWASH_PLUGIN_SOURCES
     src/tearwash/plugin/TwPresets.cpp
     src/tearwash/plugin/TwPresetData.cpp
     src/tearwash/plugin/TearwashClap.cpp
-    src/tearwash/plugin/TwGui.cpp
 )
+if(TEARWASH_UI STREQUAL "CLASSIC")
+    list(APPEND TEARWASH_PLUGIN_SOURCES src/tearwash/plugin/TwEditor.cpp)
+endif()
 
 # Shared by the plugin and the tests.
 function(tearwash_configure target)
     spux_target_flags(${target})
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/tests)
+    target_compile_definitions(${target} PRIVATE TEARWASH_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/tests/golden")
     target_include_directories(${target} PRIVATE ${TEARWASH_CLAP_INCLUDE_DIR})
-    target_link_libraries(${target} PRIVATE tearwash_engine spux_params spux_state spux_clap spux_ui_classic spux_platform
-                                            ${TEARWASH_GUI_LIBS})
+    target_link_libraries(${target} PRIVATE tearwash_engine spux_params spux_state spux_clap ${TEARWASH_GUI_LIBS})
+    if(TEARWASH_UI STREQUAL "CLASSIC")
+        target_link_libraries(${target} PRIVATE spux_ui_classic spux_ui_core spux_platform)
+        target_compile_definitions(${target} PRIVATE TEARWASH_WITH_EDITOR=1)
+    endif()
 endfunction()
 
 add_library(tearwash MODULE ${TEARWASH_PLUGIN_SOURCES})

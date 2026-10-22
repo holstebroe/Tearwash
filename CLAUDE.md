@@ -16,13 +16,18 @@ third-party DSP or GUI libraries.
   `src/tearwash/plugin/TwPresetData.cpp`), rebuild, `build/tearwash_preset_test --fit
   tools/preset_gains.json`, regenerate and rebuild (`docs/03_PRESETS.md`).
 - Parameters, state and the CLAP glue come from spux (`spux_params`, `spux_state`, `spux_clap`), and so
-  does the GUI drawing code (Graphics, Font, FileDialog, ClassicDraw, atlas fonts; `spux_ui_classic`,
-  `extern/spux`). Clone with `--recurse-submodules`; the plugin build needs spux and its
-  `third_party/clap` (the CLAP headers; Tearwash has no `clap` submodule of its own), the engine alone needs no spux.
+  does the editor (`spux_ui_core` with the Classic style `spux_ui_classic`, `spux_platform`; `extern/spux`). Clone with
+  `--recurse-submodules`; the build needs spux and its `third_party/clap` (the CLAP headers; Tearwash has no `clap`
+  submodule of its own). The engine uses spux's header-only `spux_dsp` (its delay line) and nothing else.
 - **Using spux.** Shared code lives in spux (`extern/spux`, pinned to a commit until tags start). Change
-  shared code in spux (develop with `-DSPUX_SOURCE_DIR=...`), then bump the submodule here and compare the
-  `tearwash_gui_test` snapshot (pass a `.ppm` path) before and after: Classic drawing must stay identical
-  unless a look change is intended. This plugin's UI flavor: Classic. Character code stays here.
+  shared code in spux (develop with `-DSPUX_SOURCE_DIR=...`), release a tag (until then a commit), then bump the
+  submodule here and run `tearwash_null_test` against its reference renders (`src/tests/reference/`, -90 dBFS peak).
+  Accept differences by regenerating the references (`SPUX_UPDATE_REFERENCES=1 build/tearwash_null_test`) in the same
+  commit as the pointer bump; compare the panel with its golden frames (`tearwash_gui_test`, `tearwash_preset_test`;
+  `SPUX_UPDATE_GOLDEN=1` rewrites them, only when a look change is intended). This plugin's UI flavor: Classic (set
+  `SPUX_UI_FLAVOR` to it before adding spux: `TEARWASH_UI=CLASSIC|NONE` does; a simple Retro plugin builds its UI for
+  size, a large one for speed). Character code stays here.
 - Nothing allocates, locks (except `try_lock`) or throws on the audio thread.
 - After changes run `build/tearwash_dsp_test`, `build/tearwash_preset_test`, `build/tearwash_gui_test`,
-  `build/tearwash_state_test`.
+  `build/tearwash_state_test`, `build/tearwash_null_test` (or `ctest --test-dir build`; with `-DTEARWASH_UI=NONE` there
+  is no editor and no panel test).
