@@ -23,6 +23,8 @@
 #include <cstdlib>
 #include <vector>
 
+#include "spux/dsp/DelayLine.hpp"
+
 namespace tearwash {
 
 // The controls, each 0…1 as the plugin stores them (laws below give the units).
@@ -88,16 +90,7 @@ public:
     void process(const float* inL, const float* inR, float* const* out, int n);
 
 private:
-    struct Delay {
-        std::vector<float> buf;
-        uint32_t mask = 0, pos = 0;
-        void init(double maxSamples);
-        inline void push(float x) { buf[pos & mask] = x; ++pos; }
-        // Delay of d ≥ 1 samples behind the last push, linear or cubic (Hermite) interpolation.
-        inline float lin(double d) const;
-        inline float cub(double d) const;
-        void clear();
-    };
+    using Delay = spux::dsp::DelayLine<float>;
     struct OnePole {   // y += a·(x − y)
         double a = 1.0, y = 0.0;
         inline double run(double x) { y += a * (x - y); return y; }

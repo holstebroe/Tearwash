@@ -33,11 +33,24 @@ if(TEARWASH_TOP_LEVEL)
     endif()
 endif()
 
-# Reverb engine: no plugin, GUI or CLAP dependencies.
+# spux (extern/spux, pinned to a commit; SPUX_SOURCE_DIR points at a local checkout while developing): the
+# engine's delay line (spux_dsp, header-only), and for the plugin its parameters, state and CLAP glue
+# (spux_params, spux_state, spux_clap) and the Classic drawing code.
+if(NOT SPUX_SOURCE_DIR)
+    set(SPUX_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/spux)
+endif()
+if(NOT TARGET spux_clap)
+    add_subdirectory(${SPUX_SOURCE_DIR} spux)
+endif()
+
+# Reverb engine: no plugin, GUI or CLAP dependencies (spux_dsp is header-only).
 add_library(tearwash_engine STATIC src/tearwash/engine/Reverb.cpp)
 target_include_directories(tearwash_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(tearwash_engine PUBLIC spux_dsp)
 target_compile_features(tearwash_engine PUBLIC cxx_std_17)
 set_target_properties(tearwash_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# The shared compiler flags: warnings as errors, no fast-math, no contraction, section GC, hidden visibility.
+spux_target_flags(tearwash_engine)
 
 if(NOT TEARWASH_BUILD_PLUGIN)
     return()
@@ -51,20 +64,6 @@ if(APPLE)
 elseif(WIN32)
     set(TEARWASH_GUI_LIBS comdlg32)
 endif()
-
-# The plugin's parameters, state and CLAP glue (spux_params, spux_state, spux_clap) and the Classic
-# drawing code come from spux (extern/spux, pinned to a commit; SPUX_SOURCE_DIR points at a local
-# checkout while developing). Only the plugin needs it: the engine does not.
-if(NOT SPUX_SOURCE_DIR)
-    set(SPUX_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/spux)
-endif()
-if(NOT TARGET spux_clap)
-    add_subdirectory(${SPUX_SOURCE_DIR} spux)
-endif()
-
-# The shared compiler flags (warnings as errors, no fast-math, no contraction, section GC, hidden visibility).
-# The engine builds without them when it is used alone.
-spux_target_flags(tearwash_engine)
 
 # CLAP headers: spux owns the clap submodule (third_party/clap); a parent project may override.
 if(NOT TEARWASH_CLAP_INCLUDE_DIR)
