@@ -1,5 +1,8 @@
 #include "TearwashClap.hpp"
-#include "TwGui.hpp"
+#include "spux/core/DenormalGuard.hpp"
+#ifdef TEARWASH_WITH_EDITOR
+#include "TwEditor.hpp"
+#endif
 #include "TwState.hpp"
 #include "spux/clap/ClapHelpers.hpp"
 #include <clap/ext/preset-load.h>
@@ -12,22 +15,8 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
-#if defined(__SSE__) || defined(_M_X64)
-#include <xmmintrin.h>
-#define TEARWASH_HAVE_SSE 1
-#endif
 
 namespace tearwash {
-
-#ifdef TEARWASH_HAVE_SSE
-struct ScopedFlushDenormals {
-    unsigned saved = _mm_getcsr();
-    ScopedFlushDenormals() { _mm_setcsr(saved | 0x8040u); }
-    ~ScopedFlushDenormals() { _mm_setcsr(saved); }
-};
-#else
-struct ScopedFlushDenormals {};
-#endif
 
 TearwashClap::TearwashClap(const clap_host_t* host) : Plugin(&descriptor(), host) {
     for (uint32_t i = 0; i < TW_PARAM_COUNT; ++i) presetValues_[i] = paramValue(i);   // the store starts at the defaults
@@ -37,15 +26,19 @@ TearwashClap::TearwashClap(const clap_host_t* host) : Plugin(&descriptor(), host
 TearwashClap::~TearwashClap() = default;
 
 void TearwashClap::destroy() {
+#ifdef TEARWASH_WITH_EDITOR
     destroyGuiWindow();
+#endif
     delete this;
 }
 
+#ifdef TEARWASH_WITH_EDITOR
 void TearwashClap::createGuiWindow() {
-    if (!gui_) gui_ = std::make_unique<TwGui>(this);
+    if (!gui_) gui_ = std::make_unique<TwEditor>(this);
 }
 
 void TearwashClap::destroyGuiWindow() { gui_.reset(); }
+#endif
 
 // --- Programs ------------------------------------------------------------------------------------
 
@@ -115,7 +108,9 @@ bool TearwashClap::activate(double sampleRate, uint32_t, uint32_t maxFrames) {
     fs_ = sampleRate;
     maxFrames_ = std::max<uint32_t>(maxFrames, 64);
     for (auto& s : scratch_) s.assign(maxFrames_, 0.f);
-    gainCoef_ = 1.0 - std::exp(-1.0 / (0.010 * fs_));
+    inGain_.prepare(fs_);
+    mix_.prepare(fs_);
+    outGain_.prepare(fs_);
     rev_.setSampleRate(fs_);
     runningProgram_ = program();
     rev_.setProgram(runningProgram_);
@@ -124,9 +119,9 @@ bool TearwashClap::activate(double sampleRate, uint32_t, uint32_t maxFrames) {
     rev_.reset();
     askedProgram_ = -1;
     active_ = true;
-    inGain_ = std::pow(10.0, paramValue(TW_INGAIN) / 20.0);
-    mix_ = paramValue(TW_MIX);
-    outGain_ = paramValue(TW_OUTGAIN) <= kOutGainFloorDb ? 0.0 : std::pow(10.0, paramValue(TW_OUTGAIN) / 20.0);
+    inGain_.reset(std::pow(10.0, paramValue(TW_INGAIN) / 20.0));
+    mix_.reset(paramValue(TW_MIX));
+    outGain_.reset(paramValue(TW_OUTGAIN) <= kOutGainFloorDb ? 0.0 : std::pow(10.0, paramValue(TW_OUTGAIN) / 20.0));
     return true;
 }
 
@@ -163,36 +158,33 @@ void TearwashClap::render(const float* inL, const float* inR, float* outL, float
     const double og = paramValue(TW_OUTGAIN);
     const double outTarget = og <= kOutGainFloorDb ? 0.0 : std::pow(10.0, og / 20.0);
     const double mixTarget = paramValue(TW_MIX);
-    double ig = inGain_;
+    inGain_.setTarget(inTarget);
     for (uint32_t i = 0; i < n; ++i) {
-        ig += (inTarget - ig) * gainCoef_;
+        const double ig = inGain_.next();
         const float l = inL ? inL[i] : 0.f, r = inR ? inR[i] : l;
         xl[i] = static_cast<float>(l * ig);
         xr[i] = static_cast<float>(r * ig);
     }
-    inGain_ = ig;
 
     rev_.process(xl, xr, w, static_cast<int>(n));
     const bool rear = paramValue(TW_REAR) >= 0.5;
     float* wl = rear ? w[1] : w[0];
     float* wr = rear ? w[3] : w[2];
 
-    double mx = mix_, go = outGain_;
+    mix_.setTarget(mixTarget);
+    outGain_.setTarget(outTarget);
     for (uint32_t i = 0; i < n; ++i) {
-        mx += (mixTarget - mx) * gainCoef_;
-        go += (outTarget - go) * gainCoef_;
+        const double mx = mix_.next(), go = outGain_.next();
         const float dl = inL ? inL[i] : 0.f, dr = inR ? inR[i] : dl;
         const double yl = (1.0 - mx) * dl + mx * wl[i];
         const double yr = (1.0 - mx) * dr + mx * wr[i];
         if (outL) outL[i] = static_cast<float>(yl * go);
         if (outR) outR[i] = static_cast<float>(yr * go);
     }
-    mix_ = mx;
-    outGain_ = go;
 }
 
 clap_process_status TearwashClap::process(const clap_process_t* process) {
-    ScopedFlushDenormals ftz;
+    spux::DenormalGuard ftz;
 
     const uint32_t frames = process->frames_count;
     const uint32_t numEvents = process->in_events ? process->in_events->size(process->in_events) : 0;
@@ -299,7 +291,7 @@ bool TearwashClap::paramsTextToValue(clap_id id, const char* text, double* out) 
 }
 
 void TearwashClap::paramsFlush(const clap_input_events_t* in, const clap_output_events_t* out) {
-    ScopedFlushDenormals ftz;
+    spux::DenormalGuard ftz;
     if (in && in->size && in->get) {
         const uint32_t n = in->size(in);
         for (uint32_t i = 0; i < n; ++i) handleEvent(in->get(in, i));
@@ -466,6 +458,19 @@ bool TearwashClap::stateLoad(const clap_istream_t* stream) {
 
 // --- GUI -----------------------------------------------------------------------------------------
 
+// The editor writes a host value (every parameter's host value is its plain value) and queues the edit for the host.
+void TearwashClap::setHostValueFromGui(clap_id id, double host) {
+    if (id >= TW_PARAM_COUNT) return;
+    params_.setHost(id, host);
+    markDirty();
+}
+
+bool TearwashClap::pushEditFromGui(const spux::params::ParamEdit& e, size_t reserve) {
+    std::lock_guard<std::mutex> lock(queueMutex_);
+    return edits_.tryPush(e, reserve);
+}
+
+#ifdef TEARWASH_WITH_EDITOR
 bool TearwashClap::guiCreate(const char*, bool) {
     createGuiWindow();
     return true;
@@ -478,14 +483,15 @@ bool TearwashClap::guiSetParent(const clap_window_t* window) {
 }
 
 bool TearwashClap::guiGetSize(uint32_t* width, uint32_t* height) const {
-    *width = TwGui::kWidth;
-    *height = TwGui::kHeight;
+    *width = TwEditor::kWidth;
+    *height = TwEditor::kHeight;
     return true;
 }
 
 bool TearwashClap::guiSetSize(uint32_t width, uint32_t height) { return gui_ ? gui_->setSize(width, height) : true; }
 bool TearwashClap::guiShow() { return gui_ ? gui_->show() : false; }
 bool TearwashClap::guiHide() { return gui_ ? gui_->hide() : false; }
+#endif
 
 // --- Entry ---------------------------------------------------------------------------------------
 

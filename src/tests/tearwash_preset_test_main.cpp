@@ -7,7 +7,11 @@
 //   tearwash_preset_test --fit FILE fit the factory presets' output gains (dB) to FILE (JSON)
 
 #include "tearwash/plugin/TearwashClap.hpp"
-#include "tearwash/plugin/TwGui.hpp"
+#ifdef TEARWASH_WITH_EDITOR
+#include "GoldenFrame.hpp"
+#include "tearwash/plugin/TwEditor.hpp"
+#include "spux/ui/classic/ShadedRenderer.hpp"
+#endif
 #include "tearwash/plugin/TwPresets.hpp"
 
 #include <clap/ext/preset-load.h>
@@ -190,42 +194,85 @@ int main(int argc, char** argv) {
         p.loadPreset(0);
         CHECK(p.loadState(st) && p.presetName() == "My Space" && !p.presetModified(), "state keeps the preset");
     }
+#ifdef TEARWASH_WITH_EDITOR
     // The panel: preset bar and menu.
     {
+        using namespace spux::ui;
         p.createGuiWindow();
-        TwGui& gui = *p.getGuiWindow();
-        gui.renderFrame();
-        auto centre = [&](int idx, int& x, int& y) {
-            const auto& c = gui.controls()[static_cast<size_t>(idx)];
-            x = static_cast<int>(c.x + c.w * 0.5f); y = static_cast<int>(c.y + c.h * 0.5f);
+        TwEditor& gui = *p.getGuiWindow();
+        gui.drawFrame(true);
+        auto click = [&](Point at) {
+            gui.editor().mouseMove(at.x, at.y);
+            gui.drawFrame(true);
+            gui.editor().mouseDown(at.x, at.y, MouseButton::Left, false);
+            gui.drawFrame(true);
+            gui.editor().mouseUp(at.x, at.y, MouseButton::Left);
+            gui.drawFrame(true);
         };
-        int x, y;
+        auto move = [&](Point at) {
+            gui.editor().mouseMove(at.x, at.y);
+            gui.drawFrame(true);
+        };
+        // The bar's parts (18 wide arrows, SAVE 44 wide, 8 between).
+        const Rect bar = kPresetBar;
+        const Rect next{ bar.right() - 52 - 18, bar.y, 18, bar.h };
+        const Rect name{ bar.x + 18 + 8, bar.y, next.x - (bar.x + 18) - 16, bar.h };
         p.loadPreset(p.presetLibrary().indexOf("HL Grand Rotunda"));
-        centre(gui.findControl(TwGui::Kind::PresetNext, -1), x, y);
-        gui.handleMouseDown(x, y, false);
-        gui.handleMouseUp();
+        click(next.center());
         CHECK(p.presetName() != "HL Grand Rotunda", "next button steps (%s)", p.presetName().c_str());
-        centre(gui.findControl(TwGui::Kind::PresetName, -1), x, y);
-        gui.handleMouseDown(x, y, false);
-        gui.handleMouseUp();
-        CHECK(gui.presetMenuOpen(), "click on the name opens the menu");
-        gui.renderFrame();
+        CHECK(!gui.gui().popupOpen(), "no menu yet");
+        click(name.center());
+        CHECK(gui.gui().popupOpen(), "click on the name opens the menu");
         if (argc > 1 && !fit) {
             std::ofstream f(argv[1], std::ios::binary);
-            f << "P6\n" << gui.getWidth() << " " << gui.getHeight() << "\n255\n";
-            for (uint32_t px : gui.getPixelBuffer()) {
-                const char rgb[3] = { char((px >> 16) & 0xFF), char((px >> 8) & 0xFF), char(px & 0xFF) };
+            f << "P6\n" << gui.editor().width() << " " << gui.editor().height() << "\n255\n";
+            const uint32_t* px = gui.editor().pixels();
+            for (int i = 0; i < gui.editor().width() * gui.editor().height(); ++i) {
+                const char rgb[3] = { char((px[i] >> 16) & 0xFF), char((px[i] >> 8) & 0xFF), char(px[i] & 0xFF) };
                 f.write(rgb, 3);
             }
         }
-        // First preset item of the open category (third column origin at 204, 54).
-        gui.handleMouseDown(210, 60, false);
-        gui.handleMouseUp();
-        CHECK(!gui.presetMenuOpen(), "choosing a preset closes the menu");
-        CHECK(p.presetLibrary().categoryOf(p.presetName()) == "HL", "menu loads a preset of the category (%s)", p.presetName().c_str());
+        {   // the open menu against its golden frame (the pointer rests on the name)
+            const goldenframe::Result g = goldenframe::check(TEARWASH_GOLDEN_DIR, "menu", gui.editor().pixels(), gui.editor().width(), gui.editor().height());
+            CHECK(g.ok, "menu golden frame: mean difference %.3f, moved %.3f %% (%s)", g.meanDiff, 100.0 * g.movedShare, g.note.c_str());
+        }
+        // The menu lists the families, each opening its presets beside it: lay the lists out as the Gui does.
+        spux::ui::classic::ClassicStyle style(twClassicConfig());
+        spux::ui::classic::ShadedRenderer r(kPanelWidth, kPanelHeight, 1);
+        std::vector<PopupItem> families;
+        std::string first;   // the first preset of the first family
+        for (const auto& pr : lib.presets()) {
+            const std::string fam = TwPresetLibrary::categoryName(pr.category);
+            bool seen = false;
+            for (const auto& f : families) seen = seen || f.label == fam;
+            if (!seen) {
+                families.push_back({ fam });
+                if (families.size() == 1) first = pr.name;
+            }
+        }
+        PopupState ps;
+        ps.theme = &style.theme;
+        ps.items = &families;
+        ps.anchor = name;
+        std::vector<Rect> rows;
+        const Rect box = style.popup.layout(r, ps, kPanelWidth, kPanelHeight, rows);
+        CHECK(rows.size() == families.size() && rows.size() >= 8, "a row per family (%zu)", rows.size());
+        std::vector<PopupItem> kids = { { first } };
+        PopupState sub = ps;
+        sub.items = &kids;
+        sub.anchor = Rect{ box.right() - 2, rows[0].y - 3, 0, 0 };
+        std::vector<Rect> kidRows;
+        style.popup.layout(r, sub, kPanelWidth, kPanelHeight, kidRows);
+        move(rows[0].center());
+        move(kidRows[0].center());
+        CHECK(gui.gui().popupOpen(), "the family opens its presets");
+        click(kidRows[0].center());
+        CHECK(!gui.gui().popupOpen(), "choosing a preset closes the menu");
+        CHECK(p.presetName() == first, "menu loads the first preset of the first family (%s)", p.presetName().c_str());
         CHECK(gui.savePresetAs(tmp + "/From Panel.twpreset") && p.presetName() == "From Panel", "panel save");
         p.destroyGuiWindow();
     }
+#endif
     // CLAP preset-load.
     {
         const auto* ext = static_cast<const clap_plugin_preset_load_t*>(cp->get_extension(cp, CLAP_EXT_PRESET_LOAD));

@@ -17,6 +17,7 @@
 #include "tearwash/engine/Reverb.hpp"
 
 #include "spux/clap/ClapPlugin.hpp"
+#include "spux/core/Smoothing.hpp"
 #include "spux/params/EditQueue.hpp"
 #include "spux/params/ParamStore.hpp"
 
@@ -29,7 +30,7 @@
 
 namespace tearwash {
 
-class TwGui;
+class TwEditor;
 
 class TearwashClap : public spux::clap::Plugin<TearwashClap> {
 public:
@@ -89,6 +90,14 @@ public:
     std::vector<uint8_t> stateBytes() const;
     bool loadState(const std::vector<uint8_t>& bytes);
 
+    // The editor's side (the GUI thread): host values, the version that tells it to draw, the edits to the host.
+    double paramHostValue(clap_id id) const { return id < TW_PARAM_COUNT ? params_.host(id) : 0.0; }
+    uint32_t paramVersion() const { return params_.version(); }
+    void setHostValueFromGui(clap_id id, double host);
+    bool pushEditFromGui(const spux::params::ParamEdit& e, size_t reserve);
+    void requestFlush() { requestParamsFlush(); }
+
+#ifdef TEARWASH_WITH_EDITOR
     // GUI (the CLAP gui extension through spux_clap; the platform's embedded window API, fixed size).
     bool guiCreate(const char* api, bool floating);
     void guiDestroy() { destroyGuiWindow(); }
@@ -97,12 +106,15 @@ public:
     bool guiSetSize(uint32_t width, uint32_t height);
     bool guiShow();
     bool guiHide();
-    TwGui* getGuiWindow() { return gui_.get(); }
+    TwEditor* getGuiWindow() { return gui_.get(); }
     void createGuiWindow();
     void destroyGuiWindow();
+#endif
 
 private:
-    std::unique_ptr<TwGui> gui_;
+#ifdef TEARWASH_WITH_EDITOR
+    std::unique_ptr<TwEditor> gui_;
+#endif
     spux::params::ParamStore<TW_PARAM_COUNT> params_{ twParams() };
     TwPresetLibrary presets_;
     mutable std::mutex presetMutex_;
@@ -125,8 +137,9 @@ private:
     // Scratch buffers, sized in activate().
     std::vector<float> scratch_[6];
     uint32_t maxFrames_ = 0;
-    double inGain_ = 1.0, outGain_ = 1.0, mix_ = 0.35;
-    double gainCoef_ = 0.001;
+    // Input gain, mix and output gain follow their targets with a 10 ms one-pole.
+    using GainSmoother = spux::Smoothed<spux::OnePole<0.010>, double>;
+    GainSmoother inGain_, mix_, outGain_;
     void render(const float* inL, const float* inR, float* outL, float* outR, uint32_t n);
 
     std::atomic<bool> stateDirty_{ false };
@@ -140,8 +153,6 @@ private:
     std::mutex queueMutex_;
     void queueChange(clap_id id);   // begin, value, end, or nothing when they do not fit
     std::array<bool, TW_PARAM_COUNT> gestureOpen_{};   // queueMutex_
-    void requestFlush() { requestParamsFlush(); }
-
     void setValue(clap_id id, double v) { params_.setPlain(id, v); }
     void handleEvent(const clap_event_header_t* hdr);
     void checkProgramChange();

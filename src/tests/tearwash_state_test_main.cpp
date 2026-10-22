@@ -245,8 +245,13 @@ int main(int argc, char** argv) {
     // Extensions: spux_clap offers what the plugin implements, plus Tearwash's preset-load.
     {
         Instance a;
-        for (const char* id : { CLAP_EXT_PARAMS, CLAP_EXT_STATE, CLAP_EXT_AUDIO_PORTS, CLAP_EXT_GUI, CLAP_EXT_PRESET_LOAD })
+        for (const char* id : { CLAP_EXT_PARAMS, CLAP_EXT_STATE, CLAP_EXT_AUDIO_PORTS, CLAP_EXT_PRESET_LOAD })
             CHECK(a.cp->get_extension(a.cp, id) != nullptr, "extension %s", id);
+#ifdef TEARWASH_WITH_EDITOR
+        CHECK(a.cp->get_extension(a.cp, CLAP_EXT_GUI) != nullptr, "extension %s", CLAP_EXT_GUI);
+#else
+        CHECK(a.cp->get_extension(a.cp, CLAP_EXT_GUI) == nullptr, "no editor, no gui extension");
+#endif
         CHECK(a.cp->get_extension(a.cp, CLAP_EXT_NOTE_PORTS) == nullptr, "no note ports");
         CHECK(a.cp->desc != nullptr && std::strcmp(a.cp->desc->id, "com.holstebroe.tearwash") == 0, "descriptor");
     }

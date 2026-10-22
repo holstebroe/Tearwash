@@ -25,3 +25,7 @@ __pycache__/
 
 # Local reference material (never committed)
 training/lex/
+
+# Reference renders of the null test are committed
+!src/tests/reference/*.wav
+!src/tests/golden/*.ppm

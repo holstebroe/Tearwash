@@ -76,15 +76,19 @@ tools/preset_gains.json` → `python3 tools/gen_presets.py` → build. Trims spa
 
 - Preset bar in the header: `<` and `>` step through the whole list (also the mouse wheel over
   the name), the name shows `*` when any parameter differs from the loaded preset, SAVE saves.
-- Clicking the name opens the menu over the panel: categories on the left, the category's
-  presets in two columns (the wheel scrolls a column at a time), the current preset
-  highlighted; a click loads a preset and closes the menu, a click outside closes it.
+- Clicking the name opens spux's popup menu: one row per category, each opening its presets in a
+  submenu beside it while the pointer is on it; a click loads a preset and closes the menu, a click
+  outside (or Escape) closes it. (Before the move onto spux the menu was an overlay with the
+  categories on the left and the presets in two columns.)
 - A program change, from the panel's buttons or from the host, makes the current preset that
   program's PG preset (the program as stored); the modified marker then starts clear.
 - The panel is tall and narrow: the preset bar, the programs in two rows of five, the decay
   faders, the space faders, then the motion, shimmer and level knobs. There is no meter.
 - Every fader and knob shows its current value above it. The line at the bottom says what the
-  control under the pointer does; when nothing is under the pointer it shows a hint instead.
+  control under the pointer does; when nothing is under the pointer it shows a hint instead. A
+  tooltip with the name, value and the same description follows after a moment.
+- A press on a fader jumps its cap to the pointer, a drag moves it from there (shift: fine), the wheel
+  steps half a percent (the mix a percent, the output gain half a dB), a double click resets.
 
 ## 5. Host integration
 
