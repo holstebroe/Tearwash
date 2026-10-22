@@ -62,6 +62,10 @@ if(NOT TARGET spux_clap)
     add_subdirectory(${SPUX_SOURCE_DIR} spux)
 endif()
 
+# The shared compiler flags (warnings as errors, no fast-math, no contraction, section GC, hidden visibility).
+# The engine builds without them when it is used alone.
+spux_target_flags(tearwash_engine)
+
 # CLAP headers: spux owns the clap submodule (third_party/clap); a parent project may override.
 if(NOT TEARWASH_CLAP_INCLUDE_DIR)
     set(TEARWASH_CLAP_INCLUDE_DIR ${SPUX_SOURCE_DIR}/third_party/clap/include)
@@ -82,6 +86,7 @@ set(TEARWASH_PLUGIN_SOURCES
 
 # Shared by the plugin and the tests.
 function(tearwash_configure target)
+    spux_target_flags(${target})
     target_include_directories(${target} PRIVATE ${TEARWASH_CLAP_INCLUDE_DIR})
     target_link_libraries(${target} PRIVATE tearwash_engine spux_params spux_state spux_clap spux_ui_classic spux_platform
                                             ${TEARWASH_GUI_LIBS})
@@ -105,6 +110,7 @@ add_dependencies(deploy_tearwash tearwash)
 
 add_executable(tearwash_dsp_test src/tests/tearwash_dsp_test_main.cpp)
 target_link_libraries(tearwash_dsp_test PRIVATE tearwash_engine)
+spux_target_flags(tearwash_dsp_test)
 add_executable(tearwash_gui_test ${TEARWASH_PLUGIN_SOURCES} src/tests/tearwash_gui_test_main.cpp)
 tearwash_configure(tearwash_gui_test)
 add_executable(tearwash_preset_test ${TEARWASH_PLUGIN_SOURCES} src/tests/tearwash_preset_test_main.cpp)
