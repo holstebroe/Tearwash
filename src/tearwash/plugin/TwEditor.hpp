@@ -83,7 +83,7 @@ private:
     std::unique_ptr<spux::ui::PresetHost> presets_;
     std::string description_;
     std::atomic<bool> visible_{ true };
-    void* saveDialog_ = nullptr;   // Linux: the running file dialog process
+    [[maybe_unused]] void* saveDialog_ = nullptr;   // Linux: the running file dialog process
 };
 
 } // namespace tearwash
