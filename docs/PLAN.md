@@ -61,7 +61,7 @@ Spec: [01_ARCHITECTURE.md](01_ARCHITECTURE.md), [02_ENGINE.md](02_ENGINE.md),
   spectrum/level tolerances instead of a -90 dBFS peak gate): spux's flags on every target, the delay lines of the engine are `spux::dsp::DelayLine` (the null test
   differs by -138 to -145 dBFS, last-bit rounding), gain smoothing is `Smoothed<OnePole<0.010>>`, the denormal guard
   is spux's. The panel is page functions on spux's `Gui` with the Classic style (`TwEditor`, `TwLayout.hpp`; option
-  `TEARWASH_UI=CLASSIC|NONE`): the look is the shared slate look with Tearwash's caps and rows (`twClassicConfig`),
+  `TEARWASH_UI=CLASSIC|NONE`): the look is the shared slate look on brushed steel (spux `PanelSurface::Brushed`) with Tearwash's caps and rows (`twClassicConfig`),
   the preset menu is spux's popup with a submenu per category, tooltips and double-click reset come with the Gui. The
   panel against the one before: mean difference 1.6 of 255, 1.8 % of the pixels moved by more than 24 (the second
   program row is 3 px lower, the value and name rows sit up to 2 px differently, the fader scale and the preset bar's

@@ -57,7 +57,7 @@ double wheelStep(uint32_t id) {
 
 } // namespace
 
-// The slate look with the panel's own caps (28 x 15), faders (a 4 wide groove, ticks on both sides) and rows (the value
+// The slate look on brushed steel, with the panel's own caps (28 x 15), faders (a 4 wide groove, ticks on both sides) and rows (the value
 // above a dial or fader; the names are printed on the panel).
 ClassicConfig twClassicConfig() {
     ClassicConfig c = ClassicConfig::slate();
@@ -71,6 +71,7 @@ ClassicConfig twClassicConfig() {
     c.slider.slotEnd = 2.0f;
     c.slider.scaleBothSides = true;
     c.button.radius = 4.0f;
+    c.surface = PanelSurface::Brushed; // the fine horizontal grain of a brushed steel front panel
     return c;
 }
 
