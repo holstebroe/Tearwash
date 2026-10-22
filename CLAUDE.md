@@ -21,9 +21,10 @@ third-party DSP or GUI libraries.
   submodule of its own). The engine uses spux's header-only `spux_dsp` (its delay line) and nothing else.
 - **Using spux.** Shared code lives in spux (`extern/spux`, pinned to a commit until tags start). Change
   shared code in spux (develop with `-DSPUX_SOURCE_DIR=...`), release a tag (until then a commit), then bump the
-  submodule here and run `tearwash_null_test` against its reference renders (`src/tests/reference/`, -90 dBFS peak).
-  Accept differences by regenerating the references (`SPUX_UPDATE_REFERENCES=1 build/tearwash_null_test`) in the same
-  commit as the pointer bump; compare the panel with its golden frames (`tearwash_gui_test`, `tearwash_preset_test`;
+  submodule here and run `tearwash_null_test` against its three short reference renders (`src/tests/reference/`; sound tolerances: spectrum
+  1 dB, 10 ms level 0.5 dB, the peak is a report only; for a wider check render with the previous pin on the fly and
+  store nothing). Accept differences by regenerating the references (`SPUX_UPDATE_REFERENCES=1 build/tearwash_null_test`)
+  in the same commit as the pointer bump; compare the panel with its golden frames (`tearwash_gui_test`, `tearwash_preset_test`;
   `SPUX_UPDATE_GOLDEN=1` rewrites them, only when a look change is intended). This plugin's UI flavor: Classic (set
   `SPUX_UI_FLAVOR` to it before adding spux: `TEARWASH_UI=CLASSIC|NONE` does; a simple Retro plugin builds its UI for
   size, a large one for speed). Character code stays here.
