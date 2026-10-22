@@ -31,30 +31,6 @@ void fill(Graphics& g, float x0, float y0, float x1, float y1, uint32_t argb) {
     shadeBox(g, x0, y0, x1, y1, [argb](float, float) { return argb; });
 }
 
-// Rounded rectangle; f(u, v, d) gives the colour (u, v in −1…1 across the box, d the signed
-// distance in logical pixels).
-template <class F>
-void roundRect(Graphics& g, float x0, float y0, float x1, float y1, float r, F&& f) {
-    const float s = static_cast<float>(g.getScale());
-    const float cx = 0.5f * (x0 + x1), cy = 0.5f * (y0 + y1), hx = 0.5f * (x1 - x0), hy = 0.5f * (y1 - y0);
-    shadeBox(g, x0 - 1, y0 - 1, x1 + 1, y1 + 1, [&](float x, float y) {
-        const float d = sdRoundRect(x - cx, y - cy, hx, hy, r);
-        const float cov = clamp01(0.5f - d * s);
-        if (cov <= 0.f) return 0u;
-        const uint32_t c = f((x - cx) / hx, (y - cy) / hy, d);
-        return toArgb(fromArgb(c), alphaOf(c) * cov);
-    });
-}
-
-void softShadow(Graphics& g, float x0, float y0, float x1, float y1, float r, float spread, float alpha) {
-    const float cx = 0.5f * (x0 + x1) + 1.f, cy = 0.5f * (y0 + y1) + 2.f, hx = 0.5f * (x1 - x0), hy = 0.5f * (y1 - y0);
-    shadeBox(g, x0 - spread + 1, y0 - spread + 2, x1 + spread + 1, y1 + spread + 2, [&](float x, float y) {
-        const float d = sdRoundRect(x - cx, y - cy, hx, hy, r);
-        const float a = alpha * (1.f - smoothstep(-spread * 0.3f, spread, d));
-        return a > 0.002f ? toArgb({ 0.f, 0.f, 0.f }, a) : 0u;
-    });
-}
-
 void label(Graphics& g, const char* text, float cx, float capTop, uint32_t ink = kSilk, float cap = kCap) {
     drawTextCentered(g, kLabelFont, text, cx, capTop, cap, ink);
 }
@@ -64,7 +40,7 @@ void button(Graphics& g, float x0, float y0, float x1, float y1, float r, bool s
     if (shadow) softShadow(g, x0, y0, x1, y1, r, 3.f, 0.5f);
     const Color edge = selected ? Color{ 0.88f, 0.90f, 0.92f } : Color{ 0.30f, 0.315f, 0.33f };
     const float bw = selected ? 1.5f : 1.f;
-    roundRect(g, x0, y0, x1, y1, r, [&](float, float v, float d) {
+    shadeRoundRect(g, x0, y0, x1, y1, r, [&](float, float v, float d) {
         Color fill = mix(Color{ 0.215f, 0.225f, 0.24f }, Color{ 0.125f, 0.13f, 0.14f }, 0.5f + 0.5f * v);
         if (selected) fill = scale(fill, 1.1f);
         if (hot) fill = scale(fill, 1.15f);
@@ -241,7 +217,7 @@ void TwGui::drawStatic(Graphics& g) {
     for (const Ctl& c : ctls_) {
         if (c.kind != Kind::Fader) continue;
         const float cx = c.x + c.w * 0.5f, y0 = c.y + 8.f, y1 = c.y + c.h - 8.f;
-        roundRect(g, cx - 2.f, y0 - 2, cx + 2.f, y1 + 2, 2.f, [](float, float v, float d) {
+        shadeRoundRect(g, cx - 2.f, y0 - 2, cx + 2.f, y1 + 2, 2.f, [](float, float v, float d) {
             return toArgb(mix({ 0.015f, 0.017f, 0.02f }, { 0.28f, 0.30f, 0.32f }, smoothstep(-1.f, 0.f, d) * (v > 0 ? 0.8f : 0.3f)), 1.f);
         });
         for (int i = 0; i <= 10; ++i) {
@@ -302,7 +278,7 @@ void TwGui::drawControls(Graphics& g) {
                 const float y = y1 - static_cast<float>(norm(c.param)) * (y1 - y0);
                 const float hw = 14.f, hh = 7.5f;
                 softShadow(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, 3.f, 0.6f);
-                roundRect(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, [&](float u, float v, float d) {
+                shadeRoundRect(g, cx - hw, y - hh, cx + hw, y + hh, 3.f, [&](float u, float v, float d) {
                     Color col = mix(Color{ 0.33f, 0.345f, 0.36f }, Color{ 0.15f, 0.16f, 0.17f }, 0.5f + 0.5f * v);
                     if (hot) col = scale(col, 1.18f);
                     // The edge is lit along the top and left, away from the shadow.
@@ -346,7 +322,7 @@ void TwGui::drawControls(Graphics& g) {
                 break;
             }
             case Kind::PresetName: {
-                roundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, [&](float, float v, float d) {
+                shadeRoundRect(g, c.x, c.y, c.x + c.w, c.y + c.h, 4.f, [&](float, float v, float d) {
                     Color col = mix(Color{ 0.045f, 0.05f, 0.055f }, Color{ 0.085f, 0.09f, 0.10f }, 0.5f + 0.5f * v);
                     if (hot) col = scale(col, 1.4f);
                     return toArgb(mix(col, Color{ 0.30f, 0.315f, 0.33f }, smoothstep(-1.5f, -0.5f, d)), 1.f);
@@ -417,7 +393,7 @@ int TwGui::menuHit(int x, int y) const {
 
 void TwGui::drawMenu(Graphics& g) {
     softShadow(g, kMenuX0, kMenuY0, kMenuX1, kMenuY1, 3.f, 6.f, 0.7f);
-    roundRect(g, kMenuX0, kMenuY0, kMenuX1, kMenuY1, 3.f, [](float, float v, float d) {
+    shadeRoundRect(g, kMenuX0, kMenuY0, kMenuX1, kMenuY1, 3.f, [](float, float v, float d) {
         const Color c = scale(Color{ 0.06f, 0.068f, 0.078f }, 1.f + 0.3f * v);
         return toArgb(mix(c, { 0.30f, 0.315f, 0.33f }, smoothstep(-1.5f, 0.f, d)), 0.98f);
     });
